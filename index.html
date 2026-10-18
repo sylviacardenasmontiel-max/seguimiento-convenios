@@ -1230,8 +1230,16 @@ async function iniciarMiControl(){
       const data=JSON.parse(await f.text());
       const keys=["ca.days","ca.template","ca.skips","ca.enviosListas","ca.entregasDocumentos"].filter(k=>data[k]!==undefined&&data[k]!==null);
       if(!keys.length){ flash("Ese archivo no trae datos del Control de Trabajo.","err"); return; }
-      if(!window.confirm("Se reemplazarán tus actividades, envíos y entregas de aquí con los del archivo. ¿Continuar?")) return;
+      if(!window.confirm("Se reemplazará lo que traiga el archivo (actividades, envíos o entregas). ¿Continuar?")) return;
       keys.forEach(k=>{ cache[k]=data[k]; });
+      if(keys.includes("ca.template") && !keys.includes("ca.days")){
+        const ids=new Set((cache["ca.template"]||[]).map(t=>t.id)); const hoyIso=toISO(new Date());
+        for(const [iso,items] of Object.entries(cache["ca.days"]||{})){
+          if(iso<hoyIso) continue;
+          cache["ca.days"][iso]=items.filter(it=>!it.templateId || ids.has(it.templateId) || it.done || (it.note||"").trim());
+        }
+        keys.push("ca.days");
+      }
       if(keys.includes("ca.days")) Object.keys(daysSaved).forEach(k=>delete daysSaved[k]);
       flash("Importando…");
       for(const k of keys) await flushKey(k);
@@ -1315,14 +1323,15 @@ function readFileAsText(file){
 const STORAGE_KEY = 'ca.days';
 const TEMPLATE_KEY = 'ca.template';
 const DEFAULT_TEMPLATE = [
-  {id:uid(), time:'08:00', title:'Gestión de BANCOS (control de saldos y movimientos repetidos)', tipo:'diaria'},
-  {id:uid(), time:'08:45', title:'Proceso de Liquidaciones', tipo:'diaria'},
-  {id:uid(), time:'08:50', title:'Atención y seguimiento de QUEJAS', tipo:'diaria'},
-  {id:uid(), time:'09:00', title:'Revisión del CHAT ANÁLISIS', tipo:'diaria'},
-  {id:uid(), time:'09:00', title:'Gestión de Compras de Deuda Nuevo León', tipo:'diaria'},
-  {id:uid(), time:'10:30', title:'Monitoreo de bancos y subir listas operativas', tipo:'diaria'},
-  {id:uid(), time:'11:00', title:'Análisis de Motivos', tipo:'diaria'},
-  {id:uid(), time:'11:45', title:'Ejecutar proceso de Aplicar', tipo:'diaria'},
+  {id:uid(), time:'08:00', title:"Gestión de BANCOS (control de saldos y movimientos repetidos)", tipo:'diaria'},
+  {id:uid(), time:'08:30', title:"Reporte de Listas Pendientes", tipo:'semanal', weekday:1},
+  {id:uid(), time:'08:50', title:"Atención y seguimiento de QUEJAS", tipo:'diaria'},
+  {id:uid(), time:'09:00', title:"Gestión de Compras de Deuda Nuevo León", tipo:'diaria'},
+  {id:uid(), time:'09:15', title:"Revisión del CHATS", tipo:'diaria'},
+  {id:uid(), time:'09:30', title:"Monitoreo de bancos y subir listas operativas", tipo:'diaria'},
+  {id:uid(), time:'09:45', title:"Mandar lista de cobro", tipo:'diaria'},
+  {id:uid(), time:'10:00', title:"Subir respuestas, Realizar análisis y mandar aplicar", tipo:'diaria'},
+  {id:uid(), time:'11:00', title:"Revisar Genesis", tipo:'diaria'},
 ];
 let days = load(STORAGE_KEY, {});
 let template = load(TEMPLATE_KEY, DEFAULT_TEMPLATE);
