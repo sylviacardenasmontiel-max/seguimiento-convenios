@@ -498,11 +498,21 @@ const INACTIVIDAD_MIN = 10;      // minutos sin uso antes de cerrar la sesión
 const AVISO_MIN = 2;             // aviso previo
 let ultimaActividad = Date.now(), avisoMostrado = false, sesionActiva = false;
 const ss = { get(k){try{return sessionStorage.getItem(k)}catch(e){return null}}, set(k,v){try{sessionStorage.setItem(k,v)}catch(e){}}, del(k){try{sessionStorage.removeItem(k)}catch(e){}} };
-["pointerdown","keydown","wheel","touchstart","scroll","mousemove"].forEach(ev=>addEventListener(ev,()=>{ ultimaActividad=Date.now(); if(avisoMostrado){ avisoMostrado=false; const a=document.getElementById("avisoInact"); if(a) a.remove(); } },{passive:true,capture:true}));
+// Revisa si ya pasó el límite. Se llama en cada movimiento, al regresar a la pestaña y cada 20 s,
+// porque el navegador pausa las pestañas en segundo plano y el reloj puede no correr mientras estás en otra app.
+function vencioInactividad(){
+  if(!sesionActiva) return false;
+  if((Date.now()-ultimaActividad)/60000 >= INACTIVIDAD_MIN){ sesionActiva=false; ss.set("cierreInact","1"); signOut(auth); return true; }
+  return false;
+}
+["pointerdown","keydown","wheel","touchstart","scroll","mousemove"].forEach(ev=>addEventListener(ev,()=>{ if(vencioInactividad()) return; ultimaActividad=Date.now(); if(avisoMostrado){ avisoMostrado=false; const a=document.getElementById("avisoInact"); if(a) a.remove(); } },{passive:true,capture:true}));
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") vencioInactividad(); });
+addEventListener("focus",()=>vencioInactividad());
+addEventListener("pageshow",()=>vencioInactividad());
 setInterval(()=>{
   if(!sesionActiva) return;
+  if(vencioInactividad()) return;
   const min=(Date.now()-ultimaActividad)/60000;
-  if(min>=INACTIVIDAD_MIN){ sesionActiva=false; ss.set("cierreInact","1"); signOut(auth); return; }
   if(min>=INACTIVIDAD_MIN-AVISO_MIN && !avisoMostrado){ avisoMostrado=true; const el=document.createElement("div"); el.className="toast"; el.id="avisoInact"; el.textContent=`Tu sesión se cerrará en ${AVISO_MIN} minutos por inactividad. Mueve el mouse o toca la pantalla para seguir.`; document.getElementById("toasts").append(el); }
 },20000);
 const PASS_MIN = 10;
