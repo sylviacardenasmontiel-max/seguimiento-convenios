@@ -494,7 +494,7 @@ const auth = getAuth(app);
 /* ---------- seguridad: sesión, inactividad y contraseñas ---------- */
 // La sesión vive solo mientras la pestaña esté abierta: al cerrar el navegador hay que volver a entrar.
 const persistenciaLista = setPersistence(auth, browserSessionPersistence).catch(e=>console.warn("No se pudo fijar la sesión por pestaña",e));
-const INACTIVIDAD_MIN = 30;      // minutos sin uso antes de cerrar la sesión
+const INACTIVIDAD_MIN = 10;      // minutos sin uso antes de cerrar la sesión
 const AVISO_MIN = 2;             // aviso previo
 let ultimaActividad = Date.now(), avisoMostrado = false, sesionActiva = false;
 const ss = { get(k){try{return sessionStorage.getItem(k)}catch(e){return null}}, set(k,v){try{sessionStorage.setItem(k,v)}catch(e){}}, del(k){try{sessionStorage.removeItem(k)}catch(e){}} };
