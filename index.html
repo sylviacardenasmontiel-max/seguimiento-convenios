@@ -366,7 +366,7 @@ button.chip{border:1px solid var(--line);color:var(--accent);background:var(--ac
     </section>
     <div class="tablebox">
       <table>
-        <thead><tr><th class="nosort">Fecha</th><th class="nosort">Concepto / referencia</th><th class="nosort r">Importe</th><th class="nosort">Estado</th><th class="nosort">Lista</th><th class="nosort"></th></tr></thead>
+        <thead><tr><th data-dk="fecha">Fecha</th><th data-dk="concepto">Concepto / dependencia</th><th data-dk="importe" class="r">Importe</th><th data-dk="estado">Estado</th><th data-dk="lista">Lista</th><th class="nosort"></th></tr></thead>
         <tbody id="dTb"><tr><td colspan="6" class="empty">Cargando depósitos…</td></tr></tbody>
         <tfoot id="dTf"></tfoot>
       </table>
@@ -500,6 +500,7 @@ let isAdmin = false, esJefe = false, canWrite = true;
 let rows = new Map(), equipo = [], team = [], loaded = false, equipoLoaded = false;
 let tasks = new Map(), tasksLoaded = false, confirmDel = null, avanceOpen = null;
 let deps = new Map(), depsLoaded = false, confirmDep = null; const depChoice = {};
+let depSort = {k:"fecha", dir:-1};
 let sort = {k:"dias", dir:-1};
 let selected = new Set();
 let confirmLog = null;
@@ -1049,7 +1050,12 @@ function renderDeps(){
   $("dkPend").textContent=mx0.format(sum(bp)); $("dkPendD").textContent=`${bp.length} sin lista asignada`;
   $("dkOk").textContent=mx0.format(sum(bo)); $("dkOkD").textContent=`${bo.length} ya sumados a sus listas`;
   const list=base.filter(d=>(!est||(est==="pend"?!d.lista:!!d.lista))&&(!q||normTxt(d.concepto+" "+d.referencia+" "+d.importe.toFixed(2)).includes(q)))
-    .sort((a,b)=>b.fecha.localeCompare(a.fecha)||b.importe-a.importe);
+    .sort((a,b)=>{
+      const v=d=> depSort.k==="importe"?d.importe : depSort.k==="estado"?(d.lista?1:0) : depSort.k==="lista"?(d.lista?Number(d.lista):Infinity) : depSort.k==="concepto"?normTxt(d.concepto||"~") : d.fecha;
+      const x=v(a), y=v(b); const c=(typeof x==="number"&&typeof y==="number")?x-y:String(x).localeCompare(String(y),"es");
+      return c*depSort.dir || b.fecha.localeCompare(a.fecha) || b.importe-a.importe;
+    });
+  document.querySelectorAll("th[data-dk]").forEach(th=>{ th.textContent=th.textContent.replace(/ [▲▼]$/,""); if(th.dataset.dk===depSort.k) th.textContent+=depSort.dir>0?" ▲":" ▼"; });
   const abiertas=[...rows.values()].filter(r=>pend(r)>0).sort((a,b)=>a.convenio.localeCompare(b.convenio,"es")||a.lista-b.lista);
   const optsFor=sel=>'<option value="">Elige la lista…</option>'+abiertas.map(r=>`<option value="${esc(r.id)}" ${r.id===sel?"selected":""}>${esc(r.lista)} · ${esc(r.convenio)} · pend. ${mx0.format(pend(r))}</option>`).join("");
   $("dTb").innerHTML = list.length? list.map(d=>{
@@ -1181,6 +1187,7 @@ function openDepAdd(){
 }
 $("tabD").onclick=()=>setTab("D");
 ["dFecha","dEst","dq"].forEach(id=>$(id).addEventListener("input",renderDeps));
+document.querySelectorAll("th[data-dk]").forEach(th=>th.onclick=()=>{ const k=th.dataset.dk; depSort = depSort.k===k?{k,dir:-depSort.dir}:{k,dir:(k==="fecha"||k==="importe")?-1:1}; renderDeps(); });
 $("btnDepUp").onclick=()=>$("depFile").click();
 $("depFile").onchange=()=>{ const f=$("depFile").files[0]; if(f) importDeps(f); $("depFile").value=""; };
 $("btnDepAdd").onclick=openDepAdd;
