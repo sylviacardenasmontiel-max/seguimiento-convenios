@@ -369,7 +369,7 @@ button.chip{border:1px solid var(--line);color:var(--accent);background:var(--ac
     </section>
     <section class="filters" aria-label="Filtros de depósitos">
       <label class="inline" for="dFecha">Fecha<select id="dFecha"><option value="">Todas</option></select></label>
-      <label class="inline" for="dEst">Estado<select id="dEst"><option value="">Todos</option><option value="pend">Por aplicar</option><option value="ok">Aplicados</option></select></label>
+      <label class="inline" for="dEst">Estado<select id="dEst"><option value="">Todos</option><option value="pend">Por aplicar</option><option value="ok">Aplicados</option><option value="nol">No es de lista</option></select></label>
       <label class="inline grow" for="dq">Buscar<input id="dq" type="search" placeholder="Concepto, referencia o importe"></label>
       <div class="tools" id="dAdminTools" hidden>
         <button class="ghost" id="btnDepUp">Subir depósitos (Excel)</button>
@@ -709,7 +709,7 @@ function start(){
 
   const qDeps = esJefe ? query(collection(fs,C_DEPS),limit(2000)) : query(collection(fs,C_DEPS),where("responsableUid","==",me.uid),limit(2000));
   unsubs.push(onSnapshot(qDeps, s=>{
-    deps=new Map(s.docs.map(d=>{ const x=d.data(); return [d.id,{id:d.id,fecha:String(x.fecha||""),importe:Number(x.importe)||0,concepto:String(x.concepto||""),referencia:String(x.referencia||""),lista:String(x.lista||""),aplicado:String(x.aplicado||""),aplicadoPor:String(x.aplicadoPor||""),estatusAntes:String(x.estatusAntes||""),archivado:!!x.archivado,responsableUid:String(x.responsableUid||"")}]; }));
+    deps=new Map(s.docs.map(d=>{ const x=d.data(); return [d.id,{id:d.id,fecha:String(x.fecha||""),importe:Number(x.importe)||0,concepto:String(x.concepto||""),referencia:String(x.referencia||""),lista:String(x.lista||""),aplicado:String(x.aplicado||""),aplicadoPor:String(x.aplicadoPor||""),estatusAntes:String(x.estatusAntes||""),archivado:!!x.archivado,responsableUid:String(x.responsableUid||""),noLista:!!x.noLista,noListaPor:String(x.noListaPor||""),noListaEl:String(x.noListaEl||"")}]; }));
     depsLoaded=true; renderDeps(); renderDrawerDeps(); repararResponsables();
   }, e=>{console.error(e);}));
 }
@@ -1082,7 +1082,7 @@ function exportXlsx(){
   const tk=[...tasks.values()].filter(t=>!va||t.responsable===va).map(t=>({Tarea:t.titulo,Detalle:t.detalle,Responsable:t.responsable,Prioridad:t.prioridad,"Fecha límite":t.vence,Estado:t.estado,Avance:t.avance,"Lista":t.lista,"Hecha el":t.completada?t.completada.slice(0,10):""}));
   const ws2=XLSX.utils.json_to_sheet(tk.length?tk:[{Tarea:"Sin tareas"}]); ws2["!cols"]=[{wch:40},{wch:40},{wch:18},{wch:10},{wch:12},{wch:12},{wch:40},{wch:8},{wch:12}];
   XLSX.utils.book_append_sheet(wb,ws2,"Tareas");
-  const dp=[...deps.values()].sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(d=>{ const r=rows.get(d.lista); return {Carga:d.archivado?"Anterior":"Actual",Fecha:d.fecha,Concepto:d.concepto,Referencia:d.referencia,Importe:d.importe,Estado:d.lista?"Aplicado":"Por aplicar",Lista:d.lista,Convenio:r?r.convenio:"",Responsable:r?r.responsable:"","Aplicado por":d.aplicadoPor,"Aplicado el":d.aplicado?d.aplicado.slice(0,10):""}; });
+  const dp=[...deps.values()].sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(d=>{ const r=rows.get(d.lista); return {Carga:d.archivado?"Anterior":"Actual",Fecha:d.fecha,Concepto:d.concepto,Referencia:d.referencia,Importe:d.importe,Estado:d.lista?"Aplicado":d.noLista?"No es de lista":"Por aplicar",Lista:d.lista,Convenio:r?r.convenio:"",Responsable:r?r.responsable:"","Aplicado por":d.aplicadoPor,"Aplicado el":d.aplicado?d.aplicado.slice(0,10):""}; });
   const ws3=XLSX.utils.json_to_sheet(dp.length?dp:[{Fecha:"Sin depósitos"}]); ws3["!cols"]=[{wch:9},{wch:12},{wch:44},{wch:18},{wch:14},{wch:12},{wch:8},{wch:36},{wch:18},{wch:18},{wch:12}];
   XLSX.utils.book_append_sheet(wb,ws3,"Depósitos");
   XLSX.writeFile(wb,`CONFIDENCIAL_seguimiento_convenios_${new Date().toISOString().slice(0,10)}.xlsx`);
@@ -1149,14 +1149,16 @@ async function saveTask(id,patch){ try{ await updateDoc(doc(fs,C_TAREAS,id), {..
 
 /* ---------- depósitos ---------- */
 const normTxt=s=>String(s??"").toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^A-Z0-9 ]/g," ").replace(/\s+/g," ").trim();
-const STOP=new Set(["DEL","LAS","LOS","ING","INGR","GOB","GOBIERNO","SECTOR","NOMINA","DEPOSITO","PAGO","SPEI","TRANSFERENCIA","REF","QNA","CDMX","ESTADO","SERVICIOS"]);
+const STOP=new Set(["DEL","LAS","LOS","ING","INGR","GOB","GOBIERNO","SECTOR","NOMINA","DEPOSITO","PAGO","SPEI","TRANSFERENCIA","REF","QNA","CDMX","ESTADO","SERVICIOS","POR","CREDITO","CREDITOS","PARA","CON"]);
 const toks=s=>new Set(normTxt(s).split(" ").filter(w=>w.length>=3&&!STOP.has(w)&&!/^\d+$/.test(w)));
 const r2=n=>Math.round(n*100)/100;
 function suggest(dp){
+  if(dp.noLista) return null;
   const dt=toks(dp.concepto+" "+dp.referencia); let best=null;
   for(const r of rows.values()){
     const p=pend(r); if(r.estatus==="Depositado"||p<=0) continue;
-    let ov=0; for(const w of toks(r.dependencia)) if(dt.has(w)) ov++;
+    const conv=(r.convenio&&r.convenio!==r.dependencia)?r.convenio:splitDep(r.dependencia).conv;
+    let ov=0; for(const w of toks(conv)) if(dt.has(w)) ov++;   // solo el convenio: el nombre de la financiera (ej. UNICREDIX) no cuenta
     const exacto=Math.abs(p-dp.importe)<1;
     const sc=(exacto?10:0)+ov*3+(!exacto&&ov&&dp.importe<p?1:0);
     if(sc>0 && (!best||sc>best.sc||(sc===best.sc&&dias(r.fecha)>dias(best.r.fecha)))) best={r,sc,exacto,ov};
@@ -1169,7 +1171,7 @@ function suggest(dp){
 function renderDeps(){
   if(!depsLoaded||!loaded) return;
   const all=[...deps.values()].filter(d=>!d.archivado);   // solo la carga actual; lo aplicado antes queda en cada lista
-  const pendAll=all.filter(d=>!d.lista);
+  const pendAll=all.filter(d=>!d.lista&&!d.noLista);
   $("dBadge").hidden=!(esJefe&&pendAll.length); $("dBadge").textContent=pendAll.length;
   { const s=$("dFecha"), cur=s.value; const fechas=[...new Set(all.map(d=>d.fecha).filter(Boolean))].sort().reverse();
     s.innerHTML='<option value="">Todas</option>'+fechas.map(f=>`<option value="${esc(f)}">${fmtD(f)}</option>`).join(""); if(fechas.includes(cur)) s.value=cur; }
@@ -1177,11 +1179,11 @@ function renderDeps(){
   let base=all.filter(d=>!f||d.fecha===f);
   if(va) base=base.filter(d=>!d.lista||rows.get(d.lista)?.responsable===va);
   const sum=a=>a.reduce((t,d)=>t+d.importe,0);
-  const bp=base.filter(d=>!d.lista), bo=base.filter(d=>d.lista);
+  const bp=base.filter(d=>!d.lista&&!d.noLista), bo=base.filter(d=>d.lista);
   $("dkTot").textContent=mx0.format(sum(base)); $("dkTotD").textContent=`${base.length} depósitos${f?" del "+fmtD(f):""}`;
   $("dkPend").textContent=mx0.format(sum(bp)); $("dkPendD").textContent=`${bp.length} sin lista asignada`;
   $("dkOk").textContent=mx0.format(sum(bo)); $("dkOkD").textContent=`${bo.length} ya sumados a sus listas`;
-  const list=base.filter(d=>(!est||(est==="pend"?!d.lista:!!d.lista))&&(!q||normTxt(d.concepto+" "+d.referencia+" "+d.importe.toFixed(2)).includes(q)))
+  const list=base.filter(d=>(!est||(est==="pend"?(!d.lista&&!d.noLista):est==="nol"?d.noLista:!!d.lista))&&(!q||normTxt(d.concepto+" "+d.referencia+" "+d.importe.toFixed(2)).includes(q)))
     .sort((a,b)=>{
       const v=d=> depSort.k==="importe"?d.importe : depSort.k==="estado"?(d.lista?1:0) : depSort.k==="lista"?(d.lista?Number(d.lista):Infinity) : depSort.k==="concepto"?normTxt(d.concepto||"~") : d.fecha;
       const x=v(a), y=v(b); const c=(typeof x==="number"&&typeof y==="number")?x-y:String(x).localeCompare(String(y),"es");
@@ -1196,12 +1198,17 @@ function renderDeps(){
         <td><span class="pill s-ok">Aplicado</span>${d.aplicadoPor?`<div class="fin">por ${esc(d.aplicadoPor)}</div>`:""}</td>
         <td><button class="chip" data-dl="${esc(d.lista)}">Lista ${esc(d.lista)}${r?" · "+esc(r.convenio):""}</button>${r?.responsable?`<div class="fin">${esc(r.responsable)}</div>`:""}</td>
         <td><div class="dacts">${esJefe?`<button class="ghost" data-dact="undo">${confirmDep===d.id?"Confirmar":"Desaplicar"}</button>`:""}</div></td></tr>`; }
+    if(d.noLista){
+      return `<tr data-dep="${esc(d.id)}"><td>${fmtD(d.fecha)}</td><td><div>${esc(d.concepto||"—")}</div>${d.referencia?`<div class="fin">${esc(d.referencia)}</div>`:""}</td><td class="r num">${mx.format(d.importe)}</td>
+        <td><span class="pill s-parcial">No es de lista</span>${d.noListaPor?`<div class="fin">por ${esc(d.noListaPor)}</div>`:""}</td>
+        <td>—<div class="sug weak">Pago individual: no se suma a ninguna lista</div></td>
+        <td><div class="dacts">${esJefe?`<button class="ghost" data-dact="nolUndo">Regresar a por aplicar</button>`:""}</div></td></tr>`; }
     const sg=suggest(d); const sel=depChoice[d.id]??(sg?sg.r.id:"");
     return `<tr data-dep="${esc(d.id)}"><td>${fmtD(d.fecha)}</td><td><div>${esc(d.concepto||"—")}</div>${d.referencia?`<div class="fin">${esc(d.referencia)}</div>`:""}</td><td class="r num">${mx.format(d.importe)}</td>
       <td><span class="pill s-sindep">Por aplicar</span></td>
       <td>${esJefe?`<select class="dsel" data-dsel="${esc(d.id)}" aria-label="Lista para este depósito">${optsFor(sel)}</select>`:(sg?`Lista ${esc(sg.r.lista)} · ${esc(sg.r.convenio)}`:"—")}
         ${sg?`<div class="sug ${sg.fuerte?"":"weak"}">Sugerida: lista ${esc(sg.r.lista)} · ${sg.tipo}</div>`:'<div class="sug weak">Sin sugerencia: elige la lista</div>'}</td>
-      <td><div class="dacts">${esJefe?`<button class="primary" data-dact="apply">Aplicar</button><button class="ghost" data-dact="del">${confirmDep===d.id?"Confirmar":"Borrar"}</button>`:""}</div></td></tr>`;
+      <td><div class="dacts">${esJefe?`<button class="primary" data-dact="apply">Aplicar</button><button class="ghost" data-dact="nol" title="Pago individual u otro depósito que no corresponde a ninguna lista">No es de lista</button><button class="ghost" data-dact="del">${confirmDep===d.id?"Confirmar":"Borrar"}</button>`:""}</div></td></tr>`;
   }).join("") : `<tr><td colspan="6" class="empty">${deps.size?"Ningún depósito coincide con los filtros.":(esJefe?"Aún no hay depósitos. Usa “Subir depósitos (Excel)” o “Agregar a mano”. Cada archivo que subas reemplaza al anterior.":"Aún no hay depósitos registrados.")}</td></tr>`;
   $("dTf").innerHTML = list.length? `<tr><td colspan="2">${list.length} depósitos</td><td class="r num">${mx.format(sum(list))}</td><td colspan="3"></td></tr>`:"";
   $("btnDepAuto").disabled = !pendAll.some(d=>suggest(d)?.fuerte);
@@ -1281,12 +1288,12 @@ async function importDeps(file){
       const id="d"+hashStr([fecha,importe.toFixed(2),concepto,referencia].join("|"));
       const [fy,fm,fd]=fecha.split("-"); const fechaVolteada=(+fd<=12 && fd!==fm)?`${fy}-${fd}-${fm}`:"";
       const idVolteado=fechaVolteada?"d"+hashStr([fechaVolteada,importe.toFixed(2),concepto,referencia].join("|")):"";
-      if(deps.get(id)?.lista||(idVolteado&&deps.get(idVolteado)?.lista)||nuevos.some(n=>n.id===id)){ dup++; continue; }   // ya aplicado antes (aunque se haya leído con la fecha al revés): no se vuelve a cargar
+      if(deps.get(id)?.lista||deps.get(id)?.noLista||(idVolteado&&(deps.get(idVolteado)?.lista||deps.get(idVolteado)?.noLista))||nuevos.some(n=>n.id===id)){ dup++; continue; }   // ya aplicado antes (aunque se haya leído con la fecha al revés): no se vuelve a cargar
       nuevos.push({id, d:{fecha,importe,concepto,referencia,lista:"",aplicado:"",aplicadoPor:"",estatusAntes:"",cargado:nowIso(),cargadoPor:me.nombre,archivo:file.name.slice(0,120)}});
     }
     if(!nuevos.length){ flash(dup?`Esos ${dup} depósitos ya se habían aplicado a sus listas; no se volvieron a cargar.`:"El archivo no trae depósitos con fecha e importe.","err"); return; }
     const actuales=[...deps.values()].filter(d=>!d.archivado);
-    const sinAplicar=actuales.filter(d=>!d.lista), aplicados=actuales.filter(d=>d.lista);
+    const sinAplicar=actuales.filter(d=>!d.lista&&!d.noLista), aplicados=actuales.filter(d=>d.lista||d.noLista);
     if(sinAplicar.length && !window.confirm(`Al subir este archivo se borrarán los ${sinAplicar.length} depósitos anteriores que siguen por aplicar. Los que ya aplicaste se quedan registrados en sus listas. ¿Continuar?`)) return;
     const nuevosIds=new Set(nuevos.map(n=>n.id));
     const ops=[...sinAplicar.filter(d=>!nuevosIds.has(d.id)).map(d=>b=>b.delete(doc(fs,C_DEPS,d.id))),
@@ -1336,6 +1343,12 @@ $("dTb").addEventListener("click",async e=>{
   const b=e.target.closest("[data-dact]"); if(!b) return; const id=b.closest("[data-dep]").dataset.dep; const a=b.dataset.dact;
   if(a==="apply"){ const sel=b.closest("tr").querySelector("[data-dsel]")?.value; if(!sel){ flash("Elige la lista a la que corresponde el depósito.","err"); return; }
     b.disabled=true; try{ await applyDep(id, sel); delete depChoice[id]; const r=rows.get(sel); flash(`Depósito aplicado a la lista ${r?.lista}. Estatus: ${r?.estatus}.`); }catch(err){ handleWriteErr(err); b.disabled=false; } renderDeps(); }
+  else if(a==="nol"||a==="nolUndo"){
+    b.disabled=true;
+    try{ await updateDoc(doc(fs,C_DEPS,id), a==="nol" ? {noLista:true, noListaPor:me.nombre, noListaEl:nowIso()} : {noLista:false, noListaPor:"", noListaEl:""});
+         delete depChoice[id]; flash(a==="nol" ? "Depósito marcado como \"No es de lista\". Ya no aparece en Por aplicar; lo encuentras en el filtro Estado." : "El depósito regresó a Por aplicar."); }
+    catch(err){ handleWriteErr(err); b.disabled=false; }
+  }
   else if(a==="undo"||a==="del"){
     if(confirmDep!==id){ confirmDep=id; renderDeps(); setTimeout(()=>{ if(confirmDep===id){ confirmDep=null; renderDeps(); } },4000); return; }
     confirmDep=null;
