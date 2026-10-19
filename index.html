@@ -1099,10 +1099,19 @@ async function unapplyDep(id){
   await b.commit();
 }
 const hashStr=s=>{ let h=5381; for(let i=0;i<s.length;i++) h=((h<<5)+h+s.charCodeAt(i))>>>0; return h.toString(36); };
-function parseFecha(f){
-  if(f instanceof Date) return new Date(f.getTime()+12*3600e3).toISOString().slice(0,10);
+function parseFecha(f, voltear){
+  if(f instanceof Date){
+    const iso=new Date(f.getTime()+12*3600e3).toISOString().slice(0,10);
+    if(!voltear) return iso;
+    // Excel en español convirtió un texto MES/DÍA (ej. 10/12/2026 = 12 de octubre) en fecha DÍA/MES (10 de diciembre): se regresa a su orden.
+    const [y,m,d]=iso.split("-"); return (+d<=12) ? `${y}-${d}-${m}` : iso;
+  }
   if(typeof f==="number"){ const d=XLSX.SSF.parse_date_code(f); return d?`${d.y}-${String(d.m).padStart(2,"0")}-${String(d.d).padStart(2,"0")}`:""; }
-  const t=String(f||"").trim(); let m=t.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/); if(m){ const y=m[3].length===2?"20"+m[3]:m[3]; return `${y}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`; }
+  // Texto tipo 10/03/2026: se lee como MES/DÍA/AÑO (formato de los archivos de depósitos).
+  // Solo si el primer número no puede ser mes (mayor a 12) se toma como día.
+  const t=String(f||"").trim(); let m=t.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+  if(m){ const y=m[3].length===2?"20"+m[3]:m[3]; let mes=+m[1], dia=+m[2]; if(mes>12 && dia<=12){ [mes,dia]=[dia,mes]; }
+    return `${y}-${String(mes).padStart(2,"0")}-${String(dia).padStart(2,"0")}`; }
   m=t.match(/^(\d{4})-(\d{2})-(\d{2})/); return m?m[0]:"";
 }
 const parseMonto=v=>{ if(typeof v==="number") return v; const n=Number(String(v||"").replace(/[$,\s]/g,"")); return isFinite(n)?n:0; };
@@ -1112,20 +1121,29 @@ async function importDeps(file){
     const wb=XLSX.read(await file.arrayBuffer(),{type:"array",cellDates:true});
     const aoa=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:""});
     const isF=h=>/^(FECHA|DIA|DATE)/.test(h), isI=h=>/(IMPORTE|MONTO|ABONO|DEPOSITO|CANTIDAD|CREDITO)/.test(h)&&!/SALDO|CARGO/.test(h);
-    const isC=h=>/(CONCEPTO|DESCRIPCION|DEPENDENCIA|CONVENIO|DETALLE|BENEFICIARIO|ORDENANTE|NOMBRE|LEYENDA)/.test(h), isR=h=>/(REFERENCIA|^REF|FOLIO|RASTREO|CLAVE|AUTORIZACION)/.test(h);
+    const isC=h=>/(CONCEPTO|DESCRIPCION|DEPENDENCIA|CONVENIO|DETALLE|BENEFICIARIO|ORDENANTE|NOMBRE|LEYENDA|COMENTARIO)/.test(h), isR=h=>/(REFERENCIA|^REF|FOLIO|RASTREO|CLAVE|AUTORIZACION)/.test(h);
     let hi=-1; for(let i=0;i<Math.min(aoa.length,30);i++){ const hs=aoa[i].map(normTxt); if(hs.some(isF)&&hs.some(isI)){ hi=i; break; } }
     if(hi<0){ flash("No encontré las columnas de fecha e importe. El archivo necesita una columna llamada Fecha y otra Importe (o Monto / Abono / Depósito).","err"); return; }
     const H=aoa[hi].map(normTxt);
     const iF=H.findIndex(isF), iI=H.findIndex(isI), iC=H.map((h,i)=>isC(h)?i:-1).filter(i=>i>=0), iR=H.map((h,i)=>isR(h)?i:-1).filter(i=>i>=0);
     const otros=H.map((h,i)=>i).filter(i=>i!==iF&&i!==iI&&!iR.includes(i));
     const nuevos=[]; let dup=0;
+    // ¿Excel volteó fechas? Pasa cuando el archivo trae fechas en texto MES/DÍA y Excel convirtió solo las ambiguas (día 1 a 12).
+    const crudas=aoa.slice(hi+1).map(r=>r[iF]).filter(v=>v!==""&&v!=null);
+    const hayTextoMD=crudas.some(v=>typeof v==="string" && /^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}/.test(v.trim()));
+    const manana=new Date(); manana.setDate(manana.getDate()+1); const mananaIso=manana.toISOString().slice(0,10);
+    const fechasExcel=crudas.filter(v=>v instanceof Date);
+    const futuras=fechasExcel.filter(v=>parseFecha(v,false)>mananaIso && parseFecha(v,true)<=mananaIso).length;
+    const voltear = hayTextoMD || (fechasExcel.length>0 && futuras>fechasExcel.length/2);
     for(const row of aoa.slice(hi+1)){
-      const importe=r2(parseMonto(row[iI])); const fecha=parseFecha(row[iF]);
+      const importe=r2(parseMonto(row[iI])); const fecha=parseFecha(row[iF], voltear);
       if(!(importe>0)||!fecha) continue;
       const concepto=(iC.length?iC:otros).map(i=>String(row[i]??"").trim()).filter(Boolean).join(" · ").slice(0,300);
       const referencia=iR.map(i=>String(row[i]??"").trim()).filter(Boolean).join(" · ").slice(0,120);
       const id="d"+hashStr([fecha,importe.toFixed(2),concepto,referencia].join("|"));
-      if(deps.get(id)?.lista||nuevos.some(n=>n.id===id)){ dup++; continue; }   // ya aplicado antes: no se vuelve a cargar
+      const [fy,fm,fd]=fecha.split("-"); const fechaVolteada=(+fd<=12 && fd!==fm)?`${fy}-${fd}-${fm}`:"";
+      const idVolteado=fechaVolteada?"d"+hashStr([fechaVolteada,importe.toFixed(2),concepto,referencia].join("|")):"";
+      if(deps.get(id)?.lista||(idVolteado&&deps.get(idVolteado)?.lista)||nuevos.some(n=>n.id===id)){ dup++; continue; }   // ya aplicado antes (aunque se haya leído con la fecha al revés): no se vuelve a cargar
       nuevos.push({id, d:{fecha,importe,concepto,referencia,lista:"",aplicado:"",aplicadoPor:"",estatusAntes:"",cargado:nowIso(),cargadoPor:me.nombre,archivo:file.name.slice(0,120)}});
     }
     if(!nuevos.length){ flash(dup?`Esos ${dup} depósitos ya se habían aplicado a sus listas; no se volvieron a cargar.`:"El archivo no trae depósitos con fecha e importe.","err"); return; }
