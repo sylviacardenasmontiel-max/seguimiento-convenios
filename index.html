@@ -95,6 +95,7 @@ tfoot td{font-weight:700;background:var(--surface-2)}
 .msg{font-size:13px;padding:8px 12px;border-radius:6px;background:var(--surface-2)}
 .msg.err{background:var(--bad-soft);color:var(--bad)}
 .msg.ok{background:var(--ok-soft);color:var(--ok)}
+.msg.warn{background:var(--surface-2);color:var(--warn);border:1px solid var(--warn)}
 .scrim{position:fixed;inset:0;background:rgba(10,20,25,.38);z-index:20}
 aside.drawer{position:fixed;top:0;right:0;bottom:0;width:min(460px,100%);background:var(--surface);border-left:1px solid var(--line);z-index:21;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-right:env(safe-area-inset-right,0px)}
 .dhead{padding:16px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
@@ -244,6 +245,19 @@ button.chip{border:1px solid var(--line);color:var(--accent);background:var(--ac
   </form>
 </section>
 
+<section class="login" id="pwView" hidden>
+  <form id="pwForm" autocomplete="off">
+    <div class="eyebrow">Primer acceso · Seguridad</div>
+    <h1>Crea tu contraseña</h1>
+    <p class="sub">Por seguridad, cambia la contraseña que te dieron por una que solo tú conozcas. Mínimo 10 caracteres, con letras y números.</p>
+    <label class="inline" for="pwNew">Contraseña nueva<input id="pwNew" type="password" autocomplete="new-password"></label>
+    <label class="inline" for="pwNew2">Repite la nueva<input id="pwNew2" type="password" autocomplete="new-password"></label>
+    <div id="pwErr" class="msg err" hidden></div>
+    <button class="primary" id="pwBtn">Guardar y entrar</button>
+    <button type="button" class="ghost" id="pwOut">Salir</button>
+  </form>
+</section>
+
 <div class="wrap" id="appView" hidden>
   <header class="top">
     <div>
@@ -253,12 +267,12 @@ button.chip{border:1px solid var(--line);color:var(--accent);background:var(--ac
     </div>
     <div class="tools">
       <span class="live off" id="live">Conectando…</span>
-      <label class="inline" for="viewAs">Estoy viendo
+      <label class="inline" for="viewAs" id="viewAsWrap">Estoy viendo
         <select id="viewAs"><option value="">Todo el equipo</option></select>
       </label>
       <button id="btnTeam" class="ghost" hidden>Equipo</button>
       <button id="btnImport" class="ghost" hidden>Importar Excel</button>
-      <button id="btnExport" class="ghost">Descargar Excel</button>
+      <button id="btnExport" class="ghost" hidden>Descargar Excel</button>
       <input type="file" id="fileIn" accept=".xlsx,.xls,.csv" hidden>
     </div>
   </header>
@@ -445,8 +459,8 @@ button.chip{border:1px solid var(--line);color:var(--accent);background:var(--ac
 
 <script type="module">
 import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-import { getFirestore, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc, collection, onSnapshot, query, orderBy, limit, writeBatch, increment } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, EmailAuthProvider, reauthenticateWithCredential, updatePassword } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc, collection, onSnapshot, query, where, orderBy, limit, writeBatch, increment } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, EmailAuthProvider, reauthenticateWithCredential, updatePassword, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyC00V2tUBb6qJBQkTzkBpUaO2_5pyVd3Dw",
@@ -462,8 +476,42 @@ const ADMIN_NOMBRE = "Vivis (supervisión)";
 const C_LISTAS = "seg_convenios", C_TAREAS = "seg_tareas", C_EQUIPO = "seg_equipo", C_DEPS = "seg_depositos";
 
 const app = initializeApp(firebaseConfig);
+
+/* ---------- captcha invisible (Firebase App Check + reCAPTCHA v3) ----------
+   Comprueba en segundo plano que quien usa la base de datos es una persona en ESTA página,
+   no un programa usando tu llave. Para activarlo pega aquí tu "clave del sitio" de reCAPTCHA v3.
+   Mientras esté vacío, la app funciona igual que antes. */
+const RECAPTCHA_SITE_KEY = "";
+if(RECAPTCHA_SITE_KEY){
+  try{
+    const ac = await import("https://www.gstatic.com/firebasejs/11.0.0/firebase-app-check.js");
+    ac.initializeAppCheck(app, { provider: new ac.ReCaptchaV3Provider(RECAPTCHA_SITE_KEY), isTokenAutoRefreshEnabled: true });
+  }catch(e){ console.warn("No se pudo iniciar App Check", e); }
+}
 const fs = getFirestore(app);
 const auth = getAuth(app);
+
+/* ---------- seguridad: sesión, inactividad y contraseñas ---------- */
+// La sesión vive solo mientras la pestaña esté abierta: al cerrar el navegador hay que volver a entrar.
+const persistenciaLista = setPersistence(auth, browserSessionPersistence).catch(e=>console.warn("No se pudo fijar la sesión por pestaña",e));
+const INACTIVIDAD_MIN = 30;      // minutos sin uso antes de cerrar la sesión
+const AVISO_MIN = 2;             // aviso previo
+let ultimaActividad = Date.now(), avisoMostrado = false, sesionActiva = false;
+const ss = { get(k){try{return sessionStorage.getItem(k)}catch(e){return null}}, set(k,v){try{sessionStorage.setItem(k,v)}catch(e){}}, del(k){try{sessionStorage.removeItem(k)}catch(e){}} };
+["pointerdown","keydown","wheel","touchstart","scroll","mousemove"].forEach(ev=>addEventListener(ev,()=>{ ultimaActividad=Date.now(); if(avisoMostrado){ avisoMostrado=false; const a=document.getElementById("avisoInact"); if(a) a.remove(); } },{passive:true,capture:true}));
+setInterval(()=>{
+  if(!sesionActiva) return;
+  const min=(Date.now()-ultimaActividad)/60000;
+  if(min>=INACTIVIDAD_MIN){ sesionActiva=false; ss.set("cierreInact","1"); signOut(auth); return; }
+  if(min>=INACTIVIDAD_MIN-AVISO_MIN && !avisoMostrado){ avisoMostrado=true; const el=document.createElement("div"); el.className="toast"; el.id="avisoInact"; el.textContent=`Tu sesión se cerrará en ${AVISO_MIN} minutos por inactividad. Mueve el mouse o toca la pantalla para seguir.`; document.getElementById("toasts").append(el); }
+},20000);
+const PASS_MIN = 10;
+function passDebil(p){
+  if(p.length<PASS_MIN) return `La contraseña debe tener al menos ${PASS_MIN} caracteres.`;
+  if(!/[a-zA-ZñÑ]/.test(p)||!/\d/.test(p)) return "La contraseña debe combinar letras y números.";
+  if(/^(.)\1+$/.test(p)||/^(1234567890|0123456789|contrase|password|qwerty)/i.test(p)) return "Esa contraseña es muy fácil de adivinar. Elige otra.";
+  return "";
+}
 
 const ESTATUS = [
   {k:"Sin Respuesta", c:"s-sinresp", col:"var(--bad)"},
@@ -524,9 +572,16 @@ $("loginForm").onsubmit = async e => {
   e.preventDefault();
   const u=$("lgUser").value.trim().toLowerCase(), p=$("lgPass").value;
   if(!u||!p){ showLoginErr("Escribe tu usuario y tu contraseña."); return; }
+  const bloq=Number(store.get("lgBloqHasta")||0);
+  if(Date.now()<bloq){ showLoginErr(`Demasiados intentos. Espera ${Math.ceil((bloq-Date.now())/60000)} min y vuelve a intentar.`); return; }
   $("lgBtn").disabled=true; $("lgBtn").textContent="Entrando…";
-  try{ await signInWithEmailAndPassword(auth, (u.includes("@")?u:u+DOMINIO), p); }
-  catch(err){ showLoginErr("Usuario o contraseña incorrectos."); }
+  try{ await persistenciaLista; await signInWithEmailAndPassword(auth, (u.includes("@")?u:u+DOMINIO), p); }
+  catch(err){
+    const n=Number(store.get("lgFallos")||0)+1; store.set("lgFallos",String(n));
+    if(err?.code==="auth/too-many-requests") showLoginErr("Demasiados intentos. Por seguridad la cuenta quedó en pausa unos minutos.");
+    else if(n>=5){ const min=Math.min(30, 2**(n-5)*2); store.set("lgBloqHasta",String(Date.now()+min*60000)); showLoginErr(`Usuario o contraseña incorrectos. Por seguridad espera ${min} min antes de volver a intentar.`); }
+    else showLoginErr(`Usuario o contraseña incorrectos. Te quedan ${5-n} intento${5-n===1?"":"s"}.`);
+  }
   finally{ $("lgBtn").disabled=false; $("lgBtn").textContent="Entrar"; }
 };
 function showLoginErr(t){ $("lgErr").textContent=t; $("lgErr").hidden=false; }
@@ -534,57 +589,110 @@ $("btnOut").onclick = () => signOut(auth);
 
 onAuthStateChanged(auth, async u => {
   teardown();
-  if(!u){ if(pv){ location.reload(); return; } $("appView").hidden=true; $("loginView").hidden=false; $("lgPass").value=""; return; }
+  sesionActiva = false;
+  if(!u){ if(pv){ location.reload(); return; } $("appView").hidden=true; $("pwView").hidden=true; $("loginView").hidden=false; $("lgPass").value="";
+    if(ss.get("cierreInact")){ ss.del("cierreInact"); $("lgErr").className="msg ok"; showLoginErr(`Por seguridad cerramos tu sesión después de ${INACTIVIDAD_MIN} minutos sin uso. Vuelve a entrar.`); }
+    return; }
+  $("lgErr").className="msg err"; store.set("lgFallos","0"); store.set("lgBloqHasta","0");
   isAdmin = u.email===ADMIN_EMAIL; esJefe = isAdmin;
-  let nombre = ADMIN_NOMBRE;
+  let nombre = ADMIN_NOMBRE, debeCambiar = false;
   if(!isAdmin){
     try{
       const p = await getDoc(doc(fs, C_EQUIPO, u.uid));
       if(!p.exists()){ await signOut(auth); showLoginErr("Tu usuario no tiene acceso a esta plataforma. Pide a tu supervisora que te dé de alta."); return; }
       nombre = p.data().nombre || u.email.split("@")[0];
       esJefe = p.data().rol === "supervisor";
+      debeCambiar = p.data().debeCambiarPass === true;
     }catch(e){ await signOut(auth); showLoginErr("No se pudo verificar tu acceso. Intenta de nuevo."); return; }
   }
   me = {uid:u.uid, nombre};
+  ultimaActividad = Date.now(); sesionActiva = true;
+  if(debeCambiar){ $("loginView").hidden=true; $("appView").hidden=true; $("pwView").hidden=false; $("pwErr").hidden=true; $("pwForm").reset(); $("pwNew").focus(); return; }
+  entrar();
+});
+
+$("pwOut").onclick = () => signOut(auth);
+$("pwForm").onsubmit = async e => {
+  e.preventDefault();
+  const n=$("pwNew").value, n2=$("pwNew2").value, err=t=>{ $("pwErr").textContent=t; $("pwErr").hidden=false; };
+  const d=passDebil(n); if(d) return err(d);
+  if(n!==n2) return err("Las contraseñas no coinciden.");
+  $("pwBtn").disabled=true;
+  try{
+    await updatePassword(auth.currentUser, n);
+    await updateDoc(doc(fs,C_EQUIPO,me.uid), {debeCambiarPass:false, passCambiada:nowIso()});
+    $("pwView").hidden=true; entrar();
+  }catch(ex){ console.error(ex); err(ex?.code==="auth/requires-recent-login" ? "Por seguridad vuelve a entrar con tu contraseña temporal y cámbiala de inmediato." : "No se pudo guardar la contraseña. Intenta de nuevo."); if(ex?.code==="auth/requires-recent-login") setTimeout(()=>signOut(auth),2500); }
+  finally{ $("pwBtn").disabled=false; }
+};
+
+function entrar(){
+  const nombre = me.nombre;
   $("lgErr").hidden=true; $("loginView").hidden=true; $("appView").hidden=false;
   $("meName").textContent = nombre + (!isAdmin && esJefe ? " (supervisor)" : "");
-  $("btnTeam").hidden = $("btnImport").hidden = $("tNewPanel").hidden = $("dAdminTools").hidden = !esJefe;
+  $("btnTeam").hidden = $("btnImport").hidden = $("tNewPanel").hidden = $("dAdminTools").hidden = $("btnExport").hidden = !esJefe;
+  $("viewAsWrap").hidden = !esJefe;   // el colaborador solo ve lo suyo
   if(esJefe && !$("dEst").dataset.set){ $("dEst").value="pend"; $("dEst").dataset.set="1"; }
   start();
   ["tabH","tabE","tabN"].forEach(id=>$(id).hidden=!isAdmin);
   if(isAdmin) iniciarMiControl();
-});
+  if(esJefe) avisoRespaldo();
+}
+
+// Las listas y tareas viejas pueden tener el nombre del responsable pero no su UID.
+// Como ahora cada colaborador solo ve lo que trae su UID, una jefa lo completa automáticamente.
+let reparado = false;
+async function repararResponsables(){
+  if(!esJefe || reparado || !loaded || !equipoLoaded || !tasksLoaded) return;
+  reparado = true;
+  const pend=[];
+  for(const r of rows.values()){ if(!r.responsable) continue; const u=uidDe(r.responsable); if(u && r.responsableUid!==u) pend.push([doc(fs,C_LISTAS,r.id),u]); }
+  for(const t of tasks.values()){ if(!t.responsable) continue; const u=uidDe(t.responsable); if(u && t.responsableUid!==u) pend.push([doc(fs,C_TAREAS,t.id),u]); }
+  if(!pend.length) return;
+  try{ for(let i=0;i<pend.length;i+=400){ const b=writeBatch(fs); for(const [ref,u] of pend.slice(i,i+400)) b.update(ref,{responsableUid:u}); await b.commit(); }
+       console.info(`Responsables reparados: ${pend.length}`); }
+  catch(e){ console.warn("No se pudieron reparar responsables",e); reparado=false; }
+}
+
+/* ---------- recordatorio de respaldo semanal ---------- */
+function avisoRespaldo(){
+  const ult=Number(store.get("ultimoRespaldo")||0), dias=(Date.now()-ult)/86400000;
+  if(dias<7) return;
+  setTimeout(()=>flash(ult?`Tu último respaldo fue hace ${Math.floor(dias)} días. Usa "Descargar Excel" y guárdalo en tu carpeta de respaldos.`:`Haz tu respaldo semanal: usa "Descargar Excel" y guárdalo en tu carpeta de respaldos.`,"warn"),1500);
+}
 
 function teardown(){
   unsubs.forEach(f=>{try{f()}catch(e){}}); unsubs=[];
   if(logUnsub){logUnsub();logUnsub=null;} if(comUnsub){comUnsub();comUnsub=null;}
   rows=new Map(); tasks=new Map(); deps=new Map(); depsLoaded=false; equipo=[]; team=[]; loaded=false; equipoLoaded=false; tasksLoaded=false; selected.clear();
-  closeDrawer(); refreshSelects.done=false;
+  closeDrawer(); refreshSelects.done=false; reparado=false;
 }
 
 function start(){
   unsubs.push(onSnapshot(collection(fs,C_EQUIPO), s=>{
-    equipo = s.docs.map(d=>({uid:d.id, nombre:String(d.data().nombre||""), usuario:String(d.data().usuario||""), rol:d.data().rol==="supervisor"?"supervisor":"colaborador"})).filter(e=>e.nombre).sort((a,b)=>a.nombre.localeCompare(b.nombre,"es"));
+    equipo = s.docs.map(d=>({uid:d.id, nombre:String(d.data().nombre||""), usuario:String(d.data().usuario||""), rol:d.data().rol==="supervisor"?"supervisor":"colaborador", debeCambiarPass:d.data().debeCambiarPass===true})).filter(e=>e.nombre).sort((a,b)=>a.nombre.localeCompare(b.nombre,"es"));
     team = equipo.filter(e=>e.rol!=="supervisor").map(e=>e.nombre); equipoLoaded=true;
-    refreshSelects(); render(); renderTeam();
+    refreshSelects(); render(); renderTeam(); repararResponsables();
   }, e=>{console.error(e); setLive(false);}));
 
-  unsubs.push(onSnapshot(query(collection(fs,C_LISTAS),limit(1000)), s=>{
+  const qListas = esJefe ? query(collection(fs,C_LISTAS),limit(1000)) : query(collection(fs,C_LISTAS),where("responsableUid","==",me.uid),limit(1000));
+  unsubs.push(onSnapshot(qListas, s=>{
     if(loaded) for(const ch of s.docChanges()){ if(ch.type!=="modified") continue; const x=ch.doc.data()||{}; const prev=rows.get(ch.doc.id);
       if(x.actualizadoPor && x.actualizadoPor!==me.uid && x.actualizado && x.actualizado!==prev?.actualizado) toast(x.actualizadoPorNombre, `actualizó la lista ${x.lista}${x.ultimaNota?": "+x.ultimaNota:""}`);
       const ab=x.avisoBitacora; if(ab && ab.ts && ab.porUid!==me.uid && ab.ts!==prev?.avisoBitacora?.ts) toast(ab.porNombre, ab.texto);
       const uc=x.ultimoComentario; if(uc && uc.ts && uc.porUid!==me.uid && uc.ts!==prev?.ultimoComentario?.ts) toast(uc.porNombre, `comentó en la lista ${x.lista}: ${uc.texto}`); }
     setLive(true);
     rows=new Map(s.docs.map(d=>{const x=d.data(); return [d.id,{id:d.id,lista:x.lista??Number(d.id),dependencia:String(x.dependencia||""),financiera:String(x.financiera||"Otros"),convenio:String(x.convenio||x.dependencia||""),fecha:String(x.fecha||""),importe:Number(x.importe)||0,estatusOrigen:String(x.estatusOrigen||""),estatus:ST[x.estatus]?x.estatus:normSt(x.estatus),responsable:String(x.responsable||""),responsableUid:String(x.responsableUid||""),promesa:String(x.promesa||""),depositado:Number(x.depositado)||0,ultimaNota:String(x.ultimaNota||""),actualizado:String(x.actualizado||""),comentarios:Math.max(0,Number(x.comentarios)||0),ultimoComentario:x.ultimoComentario||null,avisoBitacora:x.avisoBitacora||null}];}));
-    loaded=true; refreshSelects(); render();
+    loaded=true; refreshSelects(); render(); repararResponsables();
   }, e=>{ console.error(e); setLive(false); $("tb").innerHTML='<tr><td colspan="9" class="empty">No se pudieron cargar las listas. Revisa tu conexión y recarga la página.</td></tr>'; }));
 
-  unsubs.push(onSnapshot(query(collection(fs,C_TAREAS),limit(1000)), s=>{
+  const qTareas = esJefe ? query(collection(fs,C_TAREAS),limit(1000)) : query(collection(fs,C_TAREAS),where("responsableUid","==",me.uid),limit(1000));
+  unsubs.push(onSnapshot(qTareas, s=>{
     if(tasksLoaded) for(const ch of s.docChanges()){ const x=ch.doc.data(); if(!x||x.actualizadoPor===me.uid) continue; const va=$("viewAs").value;
       if(ch.type==="added"){ if(!va||x.responsable===va) toast(x.actualizadoPorNombre,`asignó una tarea a ${x.responsable}: ${x.titulo}`); }
       else if(ch.type==="modified"){ const p=tasks.get(ch.doc.id); if(p&&p.estado!==x.estado) toast(x.actualizadoPorNombre,`movió “${x.titulo}” a ${x.estado}`); else if(p&&x.avance&&p.avance!==x.avance) toast(x.actualizadoPorNombre,`registró avance en “${x.titulo}”: ${x.avance}`); } }
     tasks=new Map(s.docs.map(d=>{ const x=d.data(); return [d.id,{id:d.id,titulo:String(x.titulo||""),detalle:String(x.detalle||""),responsable:String(x.responsable||""),responsableUid:String(x.responsableUid||""),vence:String(x.vence||""),prioridad:["Alta","Media","Baja"].includes(x.prioridad)?x.prioridad:"Media",lista:String(x.lista||""),estado:TE.includes(x.estado)?x.estado:"Pendiente",avance:String(x.avance||""),completada:String(x.completada||"")}]; }));
-    tasksLoaded=true; renderTasks(); renderDrawerTasks();
+    tasksLoaded=true; renderTasks(); renderDrawerTasks(); repararResponsables();
   }, e=>{console.error(e); setLive(false);}));
 
   unsubs.push(onSnapshot(query(collection(fs,C_DEPS),limit(2000)), s=>{
@@ -624,7 +732,7 @@ function refreshSelects(){
   fillSelect($("nWho"),team,1);
   { const s=$("nLista"), cur=s.value; s.innerHTML='<option value="">Ninguna</option>'+[...rows.values()].sort((a,b)=>a.convenio.localeCompare(b.convenio,"es")||a.lista-b.lista).map(r=>`<option value="${esc(r.id)}">${esc(r.lista)} · ${esc(r.convenio)}</option>`).join(""); s.value=cur; }
   if(!refreshSelects.done && me && loaded && equipoLoaded){
-    const saved=store.get("viewAs:"+me.uid); const def = saved!==null ? saved : (esJefe?"":me.nombre);
+    const saved=store.get("viewAs:"+me.uid); const def = !esJefe ? "" : (saved!==null ? saved : "");
     if([...$("viewAs").options].some(o=>o.value===def)) $("viewAs").value=def;
     refreshSelects.done=true;
   }
@@ -822,7 +930,7 @@ function openTeam(){
        ${isAdmin?`<label>Tipo de usuario<select id="tmRol"><option value="colaborador">Colaborador: ve y registra su seguimiento</option><option value="supervisor">Supervisor: ve y maneja todo, menos tus pestañas personales</option></select></label>`:""}
        <div class="two">
          <label>Usuario<input id="tmUser" maxlength="30" autocapitalize="none" spellcheck="false" placeholder="sin espacios ni acentos"></label>
-         <label>Contraseña<input id="tmPass" minlength="6" placeholder="mínimo 6 caracteres"></label>
+         <label>Contraseña temporal<input id="tmPass" minlength="10" placeholder="mínimo 10, letras y números"></label>
        </div>
        <div style="display:flex;justify-content:flex-end"><button class="primary" id="tmGo">Dar de alta</button></div>
        <div id="tmMsg" hidden></div>
@@ -840,7 +948,7 @@ async function altaColaborador(e){
   const nombre=$("tmNombre").value.trim(), usuario=$("tmUser").value.trim().toLowerCase(), pass=$("tmPass").value;
   const msg=(t,k)=>{ $("tmMsg").className="msg "+k; $("tmMsg").textContent=t; $("tmMsg").hidden=false; };
   if(!nombre||!/^[a-z0-9._-]{3,30}$/.test(usuario)){ msg("Escribe el nombre y un usuario de 3 a 30 letras o números, sin espacios ni acentos.","err"); return; }
-  if(pass.length<6){ msg("La contraseña debe tener al menos 6 caracteres.","err"); return; }
+  { const d=passDebil(pass); if(d){ msg(d,"err"); return; } }
   if(team.some(t=>t.toLowerCase()===nombre.toLowerCase())){ msg("Ya hay alguien con ese nombre en el equipo.","err"); return; }
   $("tmGo").disabled=true;
   let tempApp=null;
@@ -849,9 +957,9 @@ async function altaColaborador(e){
     const tempAuth = getAuth(tempApp);
     const cred = await createUserWithEmailAndPassword(tempAuth, usuario+DOMINIO, pass);
     const rol = (isAdmin && $("tmRol")?.value==="supervisor") ? "supervisor" : "colaborador";
-    await setDoc(doc(fs,C_EQUIPO,cred.user.uid), {nombre, usuario, rol, creado:nowIso()});
+    await setDoc(doc(fs,C_EQUIPO,cred.user.uid), {nombre, usuario, rol, creado:nowIso(), debeCambiarPass:true});
     await tempAuth.signOut();
-    msg(`Listo. Usuario: ${usuario} · Contraseña: ${pass}. Compártelos por un medio seguro.`,"ok");
+    msg(`Listo. Usuario: ${usuario} · Contraseña temporal: ${pass}. Compártela por un medio seguro (en persona o llamada, no por chat de grupo). Al entrar por primera vez se le pedirá crear la suya.`,"ok");
     $("tmNombre").value=""; $("tmUser").value=""; $("tmPass").value=""; delete $("tmUser").dataset.touched;
   }catch(err){
     console.error(err);
@@ -861,17 +969,21 @@ async function altaColaborador(e){
 function renderTeam(){
   const el=$("tList"); if(!el) return;
   el.innerHTML = equipo.length? equipo.map(t=>{const n=[...rows.values()].filter(r=>r.responsable===t.nombre&&r.estatus!=="Depositado").length; const sup=t.rol==="supervisor"; const puedeQuitar=isAdmin||!sup;
-     return `<div class="row"><span>${esc(t.nombre)} ${sup?'<span class="chip media">Supervisor</span>':""} <span class="fin">· ${esc(t.usuario)}${sup?"":` · ${n} listas abiertas`}</span></span><span class="dacts">${isAdmin?`<button class="ghost" style="padding:4px 9px;font-size:12px" data-rol="${esc(t.uid)}">${sup?"Hacer colaborador":"Hacer supervisor"}</button>`:""}${puedeQuitar?`<button class="ghost" style="padding:4px 9px;font-size:12px" data-rm="${esc(t.uid)}">${confirmQuitar===t.uid?"Confirmar":"Quitar acceso"}</button>`:""}</span></div>`}).join("")
+     return `<div class="row"><span>${esc(t.nombre)} ${sup?'<span class="chip media">Supervisor</span>':""} <span class="fin">· ${esc(t.usuario)}${sup?"":` · ${n} listas abiertas`}</span></span><span class="dacts">${isAdmin?`<button class="ghost" style="padding:4px 9px;font-size:12px" data-rol="${esc(t.uid)}">${sup?"Hacer colaborador":"Hacer supervisor"}</button>`:""}${puedeQuitar?`<button class="ghost" style="padding:4px 9px;font-size:12px" data-pw="${esc(t.uid)}" title="Al entrar se le pedirá crear una contraseña nueva">${t.debeCambiarPass?"Cambio pendiente":"Pedir cambio de contraseña"}</button>`:""}${puedeQuitar?`<button class="ghost" style="padding:4px 9px;font-size:12px" data-rm="${esc(t.uid)}">${confirmQuitar===t.uid?"Confirmar":"Quitar acceso"}</button>`:""}</span></div>`}).join("")
    : '<div class="fin">Aún no hay colaboradores.</div>';
   el.querySelectorAll("[data-rol]").forEach(b=>b.onclick=async()=>{
     const t=equipo.find(e=>e.uid===b.dataset.rol); if(!t) return;
     try{ await updateDoc(doc(fs,C_EQUIPO,t.uid),{rol:t.rol==="supervisor"?"colaborador":"supervisor"}); flash(`${t.nombre} ahora es ${t.rol==="supervisor"?"colaborador":"supervisor"}. El cambio aplica la próxima vez que entre.`); }catch(e){ handleWriteErr(e); }
   });
+  el.querySelectorAll("[data-pw]").forEach(b=>b.onclick=async()=>{
+    const t=equipo.find(e=>e.uid===b.dataset.pw); if(!t||t.debeCambiarPass) return;
+    try{ await updateDoc(doc(fs,C_EQUIPO,t.uid),{debeCambiarPass:true}); flash(`La próxima vez que ${t.nombre} entre, tendrá que crear una contraseña nueva.`); }catch(e){ handleWriteErr(e); }
+  });
   el.querySelectorAll("[data-rm]").forEach(b=>b.onclick=async()=>{
     const uid=b.dataset.rm;
     if(confirmQuitar!==uid){ confirmQuitar=uid; renderTeam(); setTimeout(()=>{ if(confirmQuitar===uid){confirmQuitar=null;renderTeam();} },4000); return; }
     confirmQuitar=null;
-    try{ await deleteDoc(doc(fs,C_EQUIPO,uid)); flash("Acceso retirado. Sus listas y tareas conservan su nombre hasta que las reasignes."); }catch(e){ handleWriteErr(e); }
+    try{ await deleteDoc(doc(fs,C_EQUIPO,uid)); flash("Acceso retirado. Sus listas conservan su nombre hasta que las reasignes. Recuerda desactivar también su cuenta en Firebase → Authentication."); }catch(e){ handleWriteErr(e); }
   });
 }
 
@@ -882,7 +994,7 @@ function openPass(){
   $("drawer").innerHTML=`<div class="dhead"><div><div class="eyebrow">Mi cuenta</div><h3>Cambiar contraseña</h3></div><button class="x" id="dClose" aria-label="Cerrar">✕</button></div>
    <div class="dbody"><form class="form" id="pForm">
      <label>Contraseña actual<input type="password" id="pOld" autocomplete="current-password"></label>
-     <label>Contraseña nueva<input type="password" id="pNew" autocomplete="new-password" minlength="6"></label>
+     <label>Contraseña nueva<input type="password" id="pNew" autocomplete="new-password" minlength="10" placeholder="mínimo 10, letras y números"></label>
      <label>Repite la nueva<input type="password" id="pNew2" autocomplete="new-password"></label>
      <div id="pMsg" hidden></div>
      <div style="display:flex;justify-content:flex-end"><button class="primary" id="pGo">Guardar</button></div>
@@ -891,7 +1003,8 @@ function openPass(){
   $("pForm").onsubmit=async e=>{
     e.preventDefault(); const msg=(t,k)=>{ $("pMsg").className="msg "+k; $("pMsg").textContent=t; $("pMsg").hidden=false; };
     const a=$("pOld").value, n=$("pNew").value, n2=$("pNew2").value;
-    if(n.length<6) return msg("La nueva contraseña debe tener al menos 6 caracteres.","err");
+    { const d=passDebil(n); if(d) return msg(d,"err"); }
+    if(n===a) return msg("La nueva contraseña debe ser distinta a la actual.","err");
     if(n!==n2) return msg("Las contraseñas nuevas no coinciden.","err");
     $("pGo").disabled=true;
     try{ await reauthenticateWithCredential(auth.currentUser, EmailAuthProvider.credential(auth.currentUser.email,a)); await updatePassword(auth.currentUser,n); msg("Contraseña actualizada.","ok"); $("pForm").reset(); }
@@ -942,8 +1055,13 @@ async function importFile(file){
   }catch(e){ console.error(e); e?.code?handleWriteErr(e):flash("No se pudo leer el archivo. Revisa que tenga las columnas Lista, Dependencia, Fecha Descuento, Importe y Estatus.","err"); }
 }
 function exportXlsx(){
+  if(!esJefe){ flash("Solo la supervisión puede descargar el Excel.","err"); return; }
   if(!window.XLSX){flash("No se pudo cargar el generador de Excel. Recarga la página.","err");return;}
   const wb=XLSX.utils.book_new();
+  wb.Props={Title:"Seguimiento de Convenios - CONFIDENCIAL",Subject:"Uso interno exclusivo",Author:me.nombre,Company:"FIMUBAC",CreatedDate:new Date()};
+  const aviso=XLSX.utils.aoa_to_sheet([["CONFIDENCIAL - USO INTERNO EXCLUSIVO"],[""],["Este archivo contiene información de cobranza y datos de clientes protegidos por la Ley Federal de Protección de Datos Personales."],["No lo reenvíes, no lo subas a sitios públicos y bórralo de equipos compartidos al terminar."],[""],["Descargado por:",me.nombre],["Fecha:",new Date().toLocaleString("es-MX")]]);
+  aviso["!cols"]=[{wch:20},{wch:90}];
+  XLSX.utils.book_append_sheet(wb,aviso,"CONFIDENCIAL");
   const out=filtered().sort((a,b)=>dias(b.fecha)-dias(a.fecha)).map(r=>({Lista:r.lista,Financiera:r.financiera,Convenio:r.convenio,"Fecha descuento":r.fecha,"Días":dias(r.fecha),Importe:r.importe,Depositado:r.depositado||0,Pendiente:pend(r),"Estatus archivo":r.estatusOrigen,"Estatus actual":r.estatus,Responsable:r.responsable||"Sin asignar","Promesa de pago":r.promesa||"","Último seguimiento":r.ultimaNota||"","Comentarios":r.comentarios||0,"Último comentario":r.ultimoComentario?`${r.ultimoComentario.porNombre}: ${r.ultimoComentario.texto}`:"","Actualizado":r.actualizado?r.actualizado.slice(0,10):""}));
   const ws=XLSX.utils.json_to_sheet(out); ws["!cols"]=[{wch:8},{wch:18},{wch:42},{wch:12},{wch:6},{wch:14},{wch:14},{wch:14},{wch:14},{wch:16},{wch:18},{wch:14},{wch:50},{wch:11},{wch:50},{wch:12}];
   XLSX.utils.book_append_sheet(wb,ws,"Listas");
@@ -954,7 +1072,8 @@ function exportXlsx(){
   const dp=[...deps.values()].sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(d=>{ const r=rows.get(d.lista); return {Carga:d.archivado?"Anterior":"Actual",Fecha:d.fecha,Concepto:d.concepto,Referencia:d.referencia,Importe:d.importe,Estado:d.lista?"Aplicado":"Por aplicar",Lista:d.lista,Convenio:r?r.convenio:"",Responsable:r?r.responsable:"","Aplicado por":d.aplicadoPor,"Aplicado el":d.aplicado?d.aplicado.slice(0,10):""}; });
   const ws3=XLSX.utils.json_to_sheet(dp.length?dp:[{Fecha:"Sin depósitos"}]); ws3["!cols"]=[{wch:9},{wch:12},{wch:44},{wch:18},{wch:14},{wch:12},{wch:8},{wch:36},{wch:18},{wch:18},{wch:12}];
   XLSX.utils.book_append_sheet(wb,ws3,"Depósitos");
-  XLSX.writeFile(wb,`seguimiento_convenios_${new Date().toISOString().slice(0,10)}.xlsx`);
+  XLSX.writeFile(wb,`CONFIDENCIAL_seguimiento_convenios_${new Date().toISOString().slice(0,10)}.xlsx`);
+  store.set("ultimoRespaldo",String(Date.now()));
 }
 
 /* ---------- tareas ---------- */
