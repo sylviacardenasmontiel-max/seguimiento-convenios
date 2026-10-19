@@ -651,17 +651,19 @@ function entrar(){
 
 // Las listas y tareas viejas pueden tener el nombre del responsable pero no su UID.
 // Como ahora cada colaborador solo ve lo que trae su UID, una jefa lo completa automáticamente.
-let reparado = false;
+let reparado = false;   // true mientras corre una reparación
 async function repararResponsables(){
-  if(!esJefe || reparado || !loaded || !equipoLoaded || !tasksLoaded) return;
+  if(!esJefe || reparado || !loaded || !equipoLoaded || !tasksLoaded || !depsLoaded) return;
   reparado = true;
   const pend=[];
+  for(const d of deps.values()){ const r=d.lista?rows.get(d.lista):null; const u=r?(uidDe(r.responsable)||""):""; if(r && (d.responsableUid||"")!==u) pend.push([doc(fs,C_DEPS,d.id),u]); }
   for(const r of rows.values()){ if(!r.responsable) continue; const u=uidDe(r.responsable); if(u && r.responsableUid!==u) pend.push([doc(fs,C_LISTAS,r.id),u]); }
   for(const t of tasks.values()){ if(!t.responsable) continue; const u=uidDe(t.responsable); if(u && t.responsableUid!==u) pend.push([doc(fs,C_TAREAS,t.id),u]); }
-  if(!pend.length) return;
+  if(!pend.length){ reparado=false; return; }
   try{ for(let i=0;i<pend.length;i+=400){ const b=writeBatch(fs); for(const [ref,u] of pend.slice(i,i+400)) b.update(ref,{responsableUid:u}); await b.commit(); }
        console.info(`Responsables reparados: ${pend.length}`); }
-  catch(e){ console.warn("No se pudieron reparar responsables",e); reparado=false; }
+  catch(e){ console.warn("No se pudieron reparar responsables",e); }
+  finally{ reparado=false; }
 }
 
 /* ---------- recordatorio de respaldo semanal ---------- */
@@ -705,9 +707,10 @@ function start(){
     tasksLoaded=true; renderTasks(); renderDrawerTasks(); repararResponsables();
   }, e=>{console.error(e); setLive(false);}));
 
-  unsubs.push(onSnapshot(query(collection(fs,C_DEPS),limit(2000)), s=>{
-    deps=new Map(s.docs.map(d=>{ const x=d.data(); return [d.id,{id:d.id,fecha:String(x.fecha||""),importe:Number(x.importe)||0,concepto:String(x.concepto||""),referencia:String(x.referencia||""),lista:String(x.lista||""),aplicado:String(x.aplicado||""),aplicadoPor:String(x.aplicadoPor||""),estatusAntes:String(x.estatusAntes||""),archivado:!!x.archivado}]; }));
-    depsLoaded=true; renderDeps(); renderDrawerDeps();
+  const qDeps = esJefe ? query(collection(fs,C_DEPS),limit(2000)) : query(collection(fs,C_DEPS),where("responsableUid","==",me.uid),limit(2000));
+  unsubs.push(onSnapshot(qDeps, s=>{
+    deps=new Map(s.docs.map(d=>{ const x=d.data(); return [d.id,{id:d.id,fecha:String(x.fecha||""),importe:Number(x.importe)||0,concepto:String(x.concepto||""),referencia:String(x.referencia||""),lista:String(x.lista||""),aplicado:String(x.aplicado||""),aplicadoPor:String(x.aplicadoPor||""),estatusAntes:String(x.estatusAntes||""),archivado:!!x.archivado,responsableUid:String(x.responsableUid||"")}]; }));
+    depsLoaded=true; renderDeps(); renderDrawerDeps(); repararResponsables();
   }, e=>{console.error(e);}));
 }
 
@@ -1215,7 +1218,7 @@ async function applyDep(id, listaId){
   const f=firma(); const nota=`Depósito del ${fmtD(d.fecha)} por ${mx.format(d.importe)} aplicado`;
   const b=writeBatch(fs);
   b.update(doc(fs,C_LISTAS,r.id), {depositado:nuevo, estatus:est, ultimaNota:nota, ...f});
-  b.update(doc(fs,C_DEPS,id), {lista:r.id, aplicado:f.actualizado, aplicadoPor:me.nombre, estatusAntes:r.estatus});
+  b.update(doc(fs,C_DEPS,id), {lista:r.id, responsableUid:uidDe(r.responsable)||r.responsableUid||"", aplicado:f.actualizado, aplicadoPor:me.nombre, estatusAntes:r.estatus});
   b.set(doc(collection(fs,C_LISTAS,r.id,"bitacora")), {ts:f.actualizado, porUid:me.uid, porNombre:me.nombre, texto:"", cambios:`${nota} · Depositado: ${mx.format(nuevo)} · Estatus: ${r.estatus} → ${est}`});
   await b.commit();
   r.depositado=nuevo; r.estatus=est; d.lista=r.id;   // por si se aplican varios seguidos antes de que llegue la actualización
@@ -1230,7 +1233,7 @@ async function unapplyDep(id){
     b.update(doc(fs,C_LISTAS,r.id), {depositado:nuevo, estatus:est, ultimaNota:nota, ...f});
     b.set(doc(collection(fs,C_LISTAS,r.id,"bitacora")), {ts:f.actualizado, porUid:me.uid, porNombre:me.nombre, texto:"", cambios:`${nota} · Depositado: ${mx.format(nuevo)} · Estatus: ${r.estatus} → ${est}`});
   }
-  b.update(doc(fs,C_DEPS,id), {lista:"", aplicado:"", aplicadoPor:"", estatusAntes:""});
+  b.update(doc(fs,C_DEPS,id), {lista:"", responsableUid:"", aplicado:"", aplicadoPor:"", estatusAntes:""});
   await b.commit();
 }
 const hashStr=s=>{ let h=5381; for(let i=0;i<s.length;i++) h=((h<<5)+h+s.charCodeAt(i))>>>0; return h.toString(36); };
