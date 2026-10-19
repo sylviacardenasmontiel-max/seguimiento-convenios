@@ -656,7 +656,9 @@ async function repararResponsables(){
   if(!esJefe || reparado || !loaded || !equipoLoaded || !tasksLoaded || !depsLoaded) return;
   reparado = true;
   const pend=[];
-  for(const d of deps.values()){ const r=d.lista?rows.get(d.lista):null; const u=r?(uidDe(r.responsable)||""):""; if(r && (d.responsableUid||"")!==u) pend.push([doc(fs,C_DEPS,d.id),u]); }
+  for(const d of deps.values()){
+    if(d.noLista){ if(d.responsable){ const u=uidDe(d.responsable); if(u && d.responsableUid!==u) pend.push([doc(fs,C_DEPS,d.id),u]); } continue; }
+    const r=d.lista?rows.get(d.lista):null; const u=r?(uidDe(r.responsable)||""):""; if(r && (d.responsableUid||"")!==u) pend.push([doc(fs,C_DEPS,d.id),u]); }
   for(const r of rows.values()){ if(!r.responsable) continue; const u=uidDe(r.responsable); if(u && r.responsableUid!==u) pend.push([doc(fs,C_LISTAS,r.id),u]); }
   for(const t of tasks.values()){ if(!t.responsable) continue; const u=uidDe(t.responsable); if(u && t.responsableUid!==u) pend.push([doc(fs,C_TAREAS,t.id),u]); }
   if(!pend.length){ reparado=false; return; }
@@ -709,7 +711,7 @@ function start(){
 
   const qDeps = esJefe ? query(collection(fs,C_DEPS),limit(2000)) : query(collection(fs,C_DEPS),where("responsableUid","==",me.uid),limit(2000));
   unsubs.push(onSnapshot(qDeps, s=>{
-    deps=new Map(s.docs.map(d=>{ const x=d.data(); return [d.id,{id:d.id,fecha:String(x.fecha||""),importe:Number(x.importe)||0,concepto:String(x.concepto||""),referencia:String(x.referencia||""),lista:String(x.lista||""),aplicado:String(x.aplicado||""),aplicadoPor:String(x.aplicadoPor||""),estatusAntes:String(x.estatusAntes||""),archivado:!!x.archivado,responsableUid:String(x.responsableUid||""),noLista:!!x.noLista,noListaPor:String(x.noListaPor||""),noListaEl:String(x.noListaEl||"")}]; }));
+    deps=new Map(s.docs.map(d=>{ const x=d.data(); return [d.id,{id:d.id,fecha:String(x.fecha||""),importe:Number(x.importe)||0,concepto:String(x.concepto||""),referencia:String(x.referencia||""),lista:String(x.lista||""),aplicado:String(x.aplicado||""),aplicadoPor:String(x.aplicadoPor||""),estatusAntes:String(x.estatusAntes||""),archivado:!!x.archivado,responsableUid:String(x.responsableUid||""),noLista:!!x.noLista,noListaPor:String(x.noListaPor||""),noListaEl:String(x.noListaEl||""),responsable:String(x.responsable||""),asignadoPor:String(x.asignadoPor||"")}]; }));
     depsLoaded=true; renderDeps(); renderDrawerDeps(); repararResponsables();
   }, e=>{console.error(e);}));
 }
@@ -1082,7 +1084,7 @@ function exportXlsx(){
   const tk=[...tasks.values()].filter(t=>!va||t.responsable===va).map(t=>({Tarea:t.titulo,Detalle:t.detalle,Responsable:t.responsable,Prioridad:t.prioridad,"Fecha límite":t.vence,Estado:t.estado,Avance:t.avance,"Lista":t.lista,"Hecha el":t.completada?t.completada.slice(0,10):""}));
   const ws2=XLSX.utils.json_to_sheet(tk.length?tk:[{Tarea:"Sin tareas"}]); ws2["!cols"]=[{wch:40},{wch:40},{wch:18},{wch:10},{wch:12},{wch:12},{wch:40},{wch:8},{wch:12}];
   XLSX.utils.book_append_sheet(wb,ws2,"Tareas");
-  const dp=[...deps.values()].sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(d=>{ const r=rows.get(d.lista); return {Carga:d.archivado?"Anterior":"Actual",Fecha:d.fecha,Concepto:d.concepto,Referencia:d.referencia,Importe:d.importe,Estado:d.lista?"Aplicado":d.noLista?"No es de lista":"Por aplicar",Lista:d.lista,Convenio:r?r.convenio:"",Responsable:r?r.responsable:"","Aplicado por":d.aplicadoPor,"Aplicado el":d.aplicado?d.aplicado.slice(0,10):""}; });
+  const dp=[...deps.values()].sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(d=>{ const r=rows.get(d.lista); return {Carga:d.archivado?"Anterior":"Actual",Fecha:d.fecha,Concepto:d.concepto,Referencia:d.referencia,Importe:d.importe,Estado:d.lista?"Aplicado":d.noLista?"No es de lista":"Por aplicar",Lista:d.lista,Convenio:r?r.convenio:"",Responsable:r?r.responsable:(d.responsable||""),"Aplicado por":d.aplicadoPor,"Aplicado el":d.aplicado?d.aplicado.slice(0,10):""}; });
   const ws3=XLSX.utils.json_to_sheet(dp.length?dp:[{Fecha:"Sin depósitos"}]); ws3["!cols"]=[{wch:9},{wch:12},{wch:44},{wch:18},{wch:14},{wch:12},{wch:8},{wch:36},{wch:18},{wch:18},{wch:12}];
   XLSX.utils.book_append_sheet(wb,ws3,"Depósitos");
   XLSX.writeFile(wb,`CONFIDENCIAL_seguimiento_convenios_${new Date().toISOString().slice(0,10)}.xlsx`);
@@ -1201,8 +1203,9 @@ function renderDeps(){
     if(d.noLista){
       return `<tr data-dep="${esc(d.id)}"><td>${fmtD(d.fecha)}</td><td><div>${esc(d.concepto||"—")}</div>${d.referencia?`<div class="fin">${esc(d.referencia)}</div>`:""}</td><td class="r num">${mx.format(d.importe)}</td>
         <td><span class="pill s-parcial">No es de lista</span>${d.noListaPor?`<div class="fin">por ${esc(d.noListaPor)}</div>`:""}</td>
-        <td>—<div class="sug weak">Pago individual: no se suma a ninguna lista</div></td>
-        <td><div class="dacts">${esJefe?`<button class="ghost" data-dact="nolUndo">Regresar a por aplicar</button>`:""}</div></td></tr>`; }
+        <td>${d.responsable?`<b>${esc(d.responsable)}</b>${d.asignadoPor?`<div class="fin">se lo pasó ${esc(d.asignadoPor)}</div>`:""}`:"—"}<div class="sug weak">Pago individual: no se suma a ninguna lista</div>
+          ${esJefe?`<select class="dsel" data-nolwho="${esc(d.id)}" aria-label="Pasar este depósito a"><option value="">${d.responsable?"Cambiar a…":"Pasar a…"}</option>${team.map(t=>`<option ${t===d.responsable?"selected":""}>${esc(t)}</option>`).join("")}${d.responsable?'<option value="__quitar">Quitar asignación</option>':""}</select>`:""}</td>
+        <td><div class="dacts">${esJefe?`<button class="primary" data-dact="nolAsig">${d.responsable?"Cambiar":"Pasar"}</button><button class="ghost" data-dact="nolUndo">Regresar a por aplicar</button>`:""}</div></td></tr>`; }
     const sg=suggest(d); const sel=depChoice[d.id]??(sg?sg.r.id:"");
     return `<tr data-dep="${esc(d.id)}"><td>${fmtD(d.fecha)}</td><td><div>${esc(d.concepto||"—")}</div>${d.referencia?`<div class="fin">${esc(d.referencia)}</div>`:""}</td><td class="r num">${mx.format(d.importe)}</td>
       <td><span class="pill s-sindep">Por aplicar</span></td>
@@ -1343,9 +1346,18 @@ $("dTb").addEventListener("click",async e=>{
   const b=e.target.closest("[data-dact]"); if(!b) return; const id=b.closest("[data-dep]").dataset.dep; const a=b.dataset.dact;
   if(a==="apply"){ const sel=b.closest("tr").querySelector("[data-dsel]")?.value; if(!sel){ flash("Elige la lista a la que corresponde el depósito.","err"); return; }
     b.disabled=true; try{ await applyDep(id, sel); delete depChoice[id]; const r=rows.get(sel); flash(`Depósito aplicado a la lista ${r?.lista}. Estatus: ${r?.estatus}.`); }catch(err){ handleWriteErr(err); b.disabled=false; } renderDeps(); }
+  else if(a==="nolAsig"){
+    const v=b.closest("tr").querySelector("[data-nolwho]")?.value;
+    if(!v){ flash("Elige a quién pasarle el depósito.","err"); return; }
+    const who = v==="__quitar" ? "" : v;
+    b.disabled=true;
+    try{ await updateDoc(doc(fs,C_DEPS,id), {responsable:who, responsableUid:who?uidDe(who):"", asignadoPor:who?me.nombre:"", asignadoEl:who?nowIso():""});
+         flash(who?`Depósito pasado a ${who}. Ya lo ve en su pestaña Depósitos.`:"Se quitó la asignación del depósito."); }
+    catch(err){ handleWriteErr(err); b.disabled=false; }
+  }
   else if(a==="nol"||a==="nolUndo"){
     b.disabled=true;
-    try{ await updateDoc(doc(fs,C_DEPS,id), a==="nol" ? {noLista:true, noListaPor:me.nombre, noListaEl:nowIso()} : {noLista:false, noListaPor:"", noListaEl:""});
+    try{ await updateDoc(doc(fs,C_DEPS,id), a==="nol" ? {noLista:true, noListaPor:me.nombre, noListaEl:nowIso()} : {noLista:false, noListaPor:"", noListaEl:"", responsable:"", responsableUid:"", asignadoPor:"", asignadoEl:""});
          delete depChoice[id]; flash(a==="nol" ? "Depósito marcado como \"No es de lista\". Ya no aparece en Por aplicar; lo encuentras en el filtro Estado." : "El depósito regresó a Por aplicar."); }
     catch(err){ handleWriteErr(err); b.disabled=false; }
   }
