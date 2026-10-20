@@ -479,13 +479,13 @@ const app = initializeApp(firebaseConfig);
 
 /* ---------- captcha invisible (Firebase App Check + reCAPTCHA v3) ----------
    Comprueba en segundo plano que quien usa la base de datos es una persona en ESTA página,
-   no un programa usando tu llave. Para activarlo pega aquí tu "clave del sitio" de reCAPTCHA v3.
+   no un programa usando tu llave. Para activarlo pega aquí la "clave del sitio" de reCAPTCHA Enterprise.
    Mientras esté vacío, la app funciona igual que antes. */
-const RECAPTCHA_SITE_KEY = "";
+const RECAPTCHA_SITE_KEY = "6Lf-0PgtAAAAAMLQkqFaQlxoylWjnSYDk64gxS2z";
 if(RECAPTCHA_SITE_KEY){
   try{
     const ac = await import("https://www.gstatic.com/firebasejs/11.0.0/firebase-app-check.js");
-    ac.initializeAppCheck(app, { provider: new ac.ReCaptchaV3Provider(RECAPTCHA_SITE_KEY), isTokenAutoRefreshEnabled: true });
+    ac.initializeAppCheck(app, { provider: new ac.ReCaptchaEnterpriseProvider(RECAPTCHA_SITE_KEY), isTokenAutoRefreshEnabled: true });
   }catch(e){ console.warn("No se pudo iniciar App Check", e); }
 }
 const fs = getFirestore(app);
