@@ -1172,7 +1172,7 @@ function suggest(dp){
 }
 function renderDeps(){
   if(!depsLoaded||!loaded) return;
-  const all=[...deps.values()].filter(d=>!d.archivado);   // solo la carga actual; lo aplicado antes queda en cada lista
+  const all=[...deps.values()].filter(d=>!d.archivado||d.noLista);   // los "No es de lista" no tienen lista donde consultarse: siempre visibles   // solo la carga actual; lo aplicado antes queda en cada lista
   const pendAll=all.filter(d=>!d.lista&&!d.noLista);
   $("dBadge").hidden=!(esJefe&&pendAll.length); $("dBadge").textContent=pendAll.length;
   { const s=$("dFecha"), cur=s.value; const fechas=[...new Set(all.map(d=>d.fecha).filter(Boolean))].sort().reverse();
@@ -1205,7 +1205,7 @@ function renderDeps(){
         <td><span class="pill s-parcial">No es de lista</span>${d.noListaPor?`<div class="fin">por ${esc(d.noListaPor)}</div>`:""}</td>
         <td>${d.responsable?`<b>${esc(d.responsable)}</b>${d.asignadoPor?`<div class="fin">se lo pasó ${esc(d.asignadoPor)}</div>`:""}`:"—"}<div class="sug weak">Pago individual: no se suma a ninguna lista</div>
           ${esJefe?`<select class="dsel" data-nolwho="${esc(d.id)}" aria-label="Pasar este depósito a"><option value="">${d.responsable?"Cambiar a…":"Pasar a…"}</option>${team.map(t=>`<option ${t===d.responsable?"selected":""}>${esc(t)}</option>`).join("")}${d.responsable?'<option value="__quitar">Quitar asignación</option>':""}</select>`:""}</td>
-        <td><div class="dacts">${esJefe?`<button class="primary" data-dact="nolAsig">${d.responsable?"Cambiar":"Pasar"}</button><button class="ghost" data-dact="nolUndo">Regresar a por aplicar</button>`:""}</div></td></tr>`; }
+        <td><div class="dacts">${esJefe?`<button class="primary" data-dact="nolAsig">${d.responsable?"Cambiar":"Pasar"}</button><button class="ghost" data-dact="nolUndo">Regresar a por aplicar</button><button class="ghost" data-dact="del">${confirmDep===d.id?"Confirmar":"Borrar"}</button>`:""}</div></td></tr>`; }
     const sg=suggest(d); const sel=depChoice[d.id]??(sg?sg.r.id:"");
     return `<tr data-dep="${esc(d.id)}"><td>${fmtD(d.fecha)}</td><td><div>${esc(d.concepto||"—")}</div>${d.referencia?`<div class="fin">${esc(d.referencia)}</div>`:""}</td><td class="r num">${mx.format(d.importe)}</td>
       <td><span class="pill s-sindep">Por aplicar</span></td>
@@ -1300,7 +1300,7 @@ async function importDeps(file){
     if(sinAplicar.length && !window.confirm(`Al subir este archivo se borrarán los ${sinAplicar.length} depósitos anteriores que siguen por aplicar. Los que ya aplicaste se quedan registrados en sus listas. ¿Continuar?`)) return;
     const nuevosIds=new Set(nuevos.map(n=>n.id));
     const ops=[...sinAplicar.filter(d=>!nuevosIds.has(d.id)).map(d=>b=>b.delete(doc(fs,C_DEPS,d.id))),
-               ...aplicados.map(d=>b=>b.update(doc(fs,C_DEPS,d.id),{archivado:true})),
+               ...aplicados.filter(d=>d.lista).map(d=>b=>b.update(doc(fs,C_DEPS,d.id),{archivado:true})),
                ...nuevos.map(n=>b=>b.set(doc(fs,C_DEPS,n.id),n.d))];
     for(let i=0;i<ops.length;i+=400){ const b=writeBatch(fs); ops.slice(i,i+400).forEach(f=>f(b)); await b.commit(); }
     $("dEst").value="pend"; $("dFecha").value="";
