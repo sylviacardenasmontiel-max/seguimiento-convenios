@@ -95,7 +95,6 @@ tfoot td{font-weight:700;background:var(--surface-2)}
 .msg{font-size:13px;padding:8px 12px;border-radius:6px;background:var(--surface-2)}
 .msg.err{background:var(--bad-soft);color:var(--bad)}
 .msg.ok{background:var(--ok-soft);color:var(--ok)}
-.msg.warn{background:var(--surface-2);color:var(--warn);border:1px solid var(--warn)}
 .scrim{position:fixed;inset:0;background:rgba(10,20,25,.38);z-index:20}
 aside.drawer{position:fixed;top:0;right:0;bottom:0;width:min(460px,100%);background:var(--surface);border-left:1px solid var(--line);z-index:21;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-right:env(safe-area-inset-right,0px)}
 .dhead{padding:16px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
@@ -245,19 +244,6 @@ button.chip{border:1px solid var(--line);color:var(--accent);background:var(--ac
   </form>
 </section>
 
-<section class="login" id="pwView" hidden>
-  <form id="pwForm" autocomplete="off">
-    <div class="eyebrow">Primer acceso · Seguridad</div>
-    <h1>Crea tu contraseña</h1>
-    <p class="sub">Por seguridad, cambia la contraseña que te dieron por una que solo tú conozcas. Mínimo 10 caracteres, con letras y números.</p>
-    <label class="inline" for="pwNew">Contraseña nueva<input id="pwNew" type="password" autocomplete="new-password"></label>
-    <label class="inline" for="pwNew2">Repite la nueva<input id="pwNew2" type="password" autocomplete="new-password"></label>
-    <div id="pwErr" class="msg err" hidden></div>
-    <button class="primary" id="pwBtn">Guardar y entrar</button>
-    <button type="button" class="ghost" id="pwOut">Salir</button>
-  </form>
-</section>
-
 <div class="wrap" id="appView" hidden>
   <header class="top">
     <div>
@@ -267,12 +253,12 @@ button.chip{border:1px solid var(--line);color:var(--accent);background:var(--ac
     </div>
     <div class="tools">
       <span class="live off" id="live">Conectando…</span>
-      <label class="inline" for="viewAs" id="viewAsWrap">Estoy viendo
+      <label class="inline" for="viewAs">Estoy viendo
         <select id="viewAs"><option value="">Todo el equipo</option></select>
       </label>
       <button id="btnTeam" class="ghost" hidden>Equipo</button>
       <button id="btnImport" class="ghost" hidden>Importar Excel</button>
-      <button id="btnExport" class="ghost" hidden>Descargar Excel</button>
+      <button id="btnExport" class="ghost">Descargar Excel</button>
       <input type="file" id="fileIn" accept=".xlsx,.xls,.csv" hidden>
     </div>
   </header>
@@ -369,7 +355,7 @@ button.chip{border:1px solid var(--line);color:var(--accent);background:var(--ac
     </section>
     <section class="filters" aria-label="Filtros de depósitos">
       <label class="inline" for="dFecha">Fecha<select id="dFecha"><option value="">Todas</option></select></label>
-      <label class="inline" for="dEst">Estado<select id="dEst"><option value="">Todos</option><option value="pend">Por aplicar</option><option value="ok">Aplicados</option><option value="nol">No es de lista</option></select></label>
+      <label class="inline" for="dEst">Estado<select id="dEst"><option value="">Todos</option><option value="pend">Por aplicar</option><option value="ok">Aplicados</option></select></label>
       <label class="inline grow" for="dq">Buscar<input id="dq" type="search" placeholder="Concepto, referencia o importe"></label>
       <div class="tools" id="dAdminTools" hidden>
         <button class="ghost" id="btnDepUp">Subir depósitos (Excel)</button>
@@ -459,8 +445,8 @@ button.chip{border:1px solid var(--line);color:var(--accent);background:var(--ac
 
 <script type="module">
 import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-import { getFirestore, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc, collection, onSnapshot, query, where, orderBy, limit, writeBatch, increment } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, EmailAuthProvider, reauthenticateWithCredential, updatePassword, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
+import { getFirestore, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, addDoc, collection, onSnapshot, query, orderBy, limit, writeBatch, increment } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, EmailAuthProvider, reauthenticateWithCredential, updatePassword } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyC00V2tUBb6qJBQkTzkBpUaO2_5pyVd3Dw",
@@ -476,52 +462,8 @@ const ADMIN_NOMBRE = "Vivis (supervisión)";
 const C_LISTAS = "seg_convenios", C_TAREAS = "seg_tareas", C_EQUIPO = "seg_equipo", C_DEPS = "seg_depositos";
 
 const app = initializeApp(firebaseConfig);
-
-/* ---------- captcha invisible (Firebase App Check + reCAPTCHA v3) ----------
-   Comprueba en segundo plano que quien usa la base de datos es una persona en ESTA página,
-   no un programa usando tu llave. Para activarlo pega aquí la "clave del sitio" de reCAPTCHA Enterprise.
-   Mientras esté vacío, la app funciona igual que antes. */
-const RECAPTCHA_SITE_KEY = "6Lf-0PgtAAAAAMLQkqFaQlxoylWjnSYDk64gxS2z";
-if(RECAPTCHA_SITE_KEY){
-  try{
-    const ac = await import("https://www.gstatic.com/firebasejs/11.0.0/firebase-app-check.js");
-    ac.initializeAppCheck(app, { provider: new ac.ReCaptchaEnterpriseProvider(RECAPTCHA_SITE_KEY), isTokenAutoRefreshEnabled: true });
-  }catch(e){ console.warn("No se pudo iniciar App Check", e); }
-}
 const fs = getFirestore(app);
 const auth = getAuth(app);
-
-/* ---------- seguridad: sesión, inactividad y contraseñas ---------- */
-// La sesión vive solo mientras la pestaña esté abierta: al cerrar el navegador hay que volver a entrar.
-const persistenciaLista = setPersistence(auth, browserSessionPersistence).catch(e=>console.warn("No se pudo fijar la sesión por pestaña",e));
-const INACTIVIDAD_MIN = 10;      // minutos sin uso antes de cerrar la sesión
-const AVISO_MIN = 2;             // aviso previo
-let ultimaActividad = Date.now(), avisoMostrado = false, sesionActiva = false;
-const ss = { get(k){try{return sessionStorage.getItem(k)}catch(e){return null}}, set(k,v){try{sessionStorage.setItem(k,v)}catch(e){}}, del(k){try{sessionStorage.removeItem(k)}catch(e){}} };
-// Revisa si ya pasó el límite. Se llama en cada movimiento, al regresar a la pestaña y cada 20 s,
-// porque el navegador pausa las pestañas en segundo plano y el reloj puede no correr mientras estás en otra app.
-function vencioInactividad(){
-  if(!sesionActiva) return false;
-  if((Date.now()-ultimaActividad)/60000 >= INACTIVIDAD_MIN){ sesionActiva=false; ss.set("cierreInact","1"); signOut(auth); return true; }
-  return false;
-}
-["pointerdown","keydown","wheel","touchstart","scroll","mousemove"].forEach(ev=>addEventListener(ev,()=>{ if(vencioInactividad()) return; ultimaActividad=Date.now(); if(avisoMostrado){ avisoMostrado=false; const a=document.getElementById("avisoInact"); if(a) a.remove(); } },{passive:true,capture:true}));
-document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") vencioInactividad(); });
-addEventListener("focus",()=>vencioInactividad());
-addEventListener("pageshow",()=>vencioInactividad());
-setInterval(()=>{
-  if(!sesionActiva) return;
-  if(vencioInactividad()) return;
-  const min=(Date.now()-ultimaActividad)/60000;
-  if(min>=INACTIVIDAD_MIN-AVISO_MIN && !avisoMostrado){ avisoMostrado=true; const el=document.createElement("div"); el.className="toast"; el.id="avisoInact"; el.textContent=`Tu sesión se cerrará en ${AVISO_MIN} minutos por inactividad. Mueve el mouse o toca la pantalla para seguir.`; document.getElementById("toasts").append(el); }
-},20000);
-const PASS_MIN = 10;
-function passDebil(p){
-  if(p.length<PASS_MIN) return `La contraseña debe tener al menos ${PASS_MIN} caracteres.`;
-  if(!/[a-zA-ZñÑ]/.test(p)||!/\d/.test(p)) return "La contraseña debe combinar letras y números.";
-  if(/^(.)\1+$/.test(p)||/^(1234567890|0123456789|contrase|password|qwerty)/i.test(p)) return "Esa contraseña es muy fácil de adivinar. Elige otra.";
-  return "";
-}
 
 const ESTATUS = [
   {k:"Sin Respuesta", c:"s-sinresp", col:"var(--bad)"},
@@ -582,16 +524,9 @@ $("loginForm").onsubmit = async e => {
   e.preventDefault();
   const u=$("lgUser").value.trim().toLowerCase(), p=$("lgPass").value;
   if(!u||!p){ showLoginErr("Escribe tu usuario y tu contraseña."); return; }
-  const bloq=Number(store.get("lgBloqHasta")||0);
-  if(Date.now()<bloq){ showLoginErr(`Demasiados intentos. Espera ${Math.ceil((bloq-Date.now())/60000)} min y vuelve a intentar.`); return; }
   $("lgBtn").disabled=true; $("lgBtn").textContent="Entrando…";
-  try{ await persistenciaLista; await signInWithEmailAndPassword(auth, (u.includes("@")?u:u+DOMINIO), p); }
-  catch(err){
-    const n=Number(store.get("lgFallos")||0)+1; store.set("lgFallos",String(n));
-    if(err?.code==="auth/too-many-requests") showLoginErr("Demasiados intentos. Por seguridad la cuenta quedó en pausa unos minutos.");
-    else if(n>=5){ const min=Math.min(30, 2**(n-5)*2); store.set("lgBloqHasta",String(Date.now()+min*60000)); showLoginErr(`Usuario o contraseña incorrectos. Por seguridad espera ${min} min antes de volver a intentar.`); }
-    else showLoginErr(`Usuario o contraseña incorrectos. Te quedan ${5-n} intento${5-n===1?"":"s"}.`);
-  }
+  try{ await signInWithEmailAndPassword(auth, (u.includes("@")?u:u+DOMINIO), p); }
+  catch(err){ showLoginErr("Usuario o contraseña incorrectos."); }
   finally{ $("lgBtn").disabled=false; $("lgBtn").textContent="Entrar"; }
 };
 function showLoginErr(t){ $("lgErr").textContent=t; $("lgErr").hidden=false; }
@@ -599,120 +534,62 @@ $("btnOut").onclick = () => signOut(auth);
 
 onAuthStateChanged(auth, async u => {
   teardown();
-  sesionActiva = false;
-  if(!u){ if(pv){ location.reload(); return; } $("appView").hidden=true; $("pwView").hidden=true; $("loginView").hidden=false; $("lgPass").value="";
-    if(ss.get("cierreInact")){ ss.del("cierreInact"); $("lgErr").className="msg ok"; showLoginErr(`Por seguridad cerramos tu sesión después de ${INACTIVIDAD_MIN} minutos sin uso. Vuelve a entrar.`); }
-    return; }
-  $("lgErr").className="msg err"; store.set("lgFallos","0"); store.set("lgBloqHasta","0");
+  if(!u){ if(pv){ location.reload(); return; } $("appView").hidden=true; $("loginView").hidden=false; $("lgPass").value=""; return; }
   isAdmin = u.email===ADMIN_EMAIL; esJefe = isAdmin;
-  let nombre = ADMIN_NOMBRE, debeCambiar = false;
+  let nombre = ADMIN_NOMBRE;
   if(!isAdmin){
     try{
       const p = await getDoc(doc(fs, C_EQUIPO, u.uid));
       if(!p.exists()){ await signOut(auth); showLoginErr("Tu usuario no tiene acceso a esta plataforma. Pide a tu supervisora que te dé de alta."); return; }
       nombre = p.data().nombre || u.email.split("@")[0];
       esJefe = p.data().rol === "supervisor";
-      debeCambiar = p.data().debeCambiarPass === true;
     }catch(e){ await signOut(auth); showLoginErr("No se pudo verificar tu acceso. Intenta de nuevo."); return; }
   }
   me = {uid:u.uid, nombre};
-  ultimaActividad = Date.now(); sesionActiva = true;
-  if(debeCambiar){ $("loginView").hidden=true; $("appView").hidden=true; $("pwView").hidden=false; $("pwErr").hidden=true; $("pwForm").reset(); $("pwNew").focus(); return; }
-  entrar();
-});
-
-$("pwOut").onclick = () => signOut(auth);
-$("pwForm").onsubmit = async e => {
-  e.preventDefault();
-  const n=$("pwNew").value, n2=$("pwNew2").value, err=t=>{ $("pwErr").textContent=t; $("pwErr").hidden=false; };
-  const d=passDebil(n); if(d) return err(d);
-  if(n!==n2) return err("Las contraseñas no coinciden.");
-  $("pwBtn").disabled=true;
-  try{
-    await updatePassword(auth.currentUser, n);
-    await updateDoc(doc(fs,C_EQUIPO,me.uid), {debeCambiarPass:false, passCambiada:nowIso()});
-    $("pwView").hidden=true; entrar();
-  }catch(ex){ console.error(ex); err(ex?.code==="auth/requires-recent-login" ? "Por seguridad vuelve a entrar con tu contraseña temporal y cámbiala de inmediato." : "No se pudo guardar la contraseña. Intenta de nuevo."); if(ex?.code==="auth/requires-recent-login") setTimeout(()=>signOut(auth),2500); }
-  finally{ $("pwBtn").disabled=false; }
-};
-
-function entrar(){
-  const nombre = me.nombre;
   $("lgErr").hidden=true; $("loginView").hidden=true; $("appView").hidden=false;
   $("meName").textContent = nombre + (!isAdmin && esJefe ? " (supervisor)" : "");
-  $("btnTeam").hidden = $("btnImport").hidden = $("tNewPanel").hidden = $("dAdminTools").hidden = $("btnExport").hidden = !esJefe;
-  $("viewAsWrap").hidden = !esJefe;   // el colaborador solo ve lo suyo
+  $("btnTeam").hidden = $("btnImport").hidden = $("tNewPanel").hidden = $("dAdminTools").hidden = !esJefe;
   if(esJefe && !$("dEst").dataset.set){ $("dEst").value="pend"; $("dEst").dataset.set="1"; }
   start();
   ["tabH","tabE","tabN"].forEach(id=>$(id).hidden=!isAdmin);
   if(isAdmin) iniciarMiControl();
-  if(esJefe) avisoRespaldo();
-}
-
-// Las listas y tareas viejas pueden tener el nombre del responsable pero no su UID.
-// Como ahora cada colaborador solo ve lo que trae su UID, una jefa lo completa automáticamente.
-let reparado = false;   // true mientras corre una reparación
-async function repararResponsables(){
-  if(!esJefe || reparado || !loaded || !equipoLoaded || !tasksLoaded || !depsLoaded) return;
-  reparado = true;
-  const pend=[];
-  for(const d of deps.values()){
-    if(d.noLista){ if(d.responsable){ const u=uidDe(d.responsable); if(u && d.responsableUid!==u) pend.push([doc(fs,C_DEPS,d.id),u]); } continue; }
-    const r=d.lista?rows.get(d.lista):null; const u=r?(uidDe(r.responsable)||""):""; if(r && (d.responsableUid||"")!==u) pend.push([doc(fs,C_DEPS,d.id),u]); }
-  for(const r of rows.values()){ if(!r.responsable) continue; const u=uidDe(r.responsable); if(u && r.responsableUid!==u) pend.push([doc(fs,C_LISTAS,r.id),u]); }
-  for(const t of tasks.values()){ if(!t.responsable) continue; const u=uidDe(t.responsable); if(u && t.responsableUid!==u) pend.push([doc(fs,C_TAREAS,t.id),u]); }
-  if(!pend.length){ reparado=false; return; }
-  try{ for(let i=0;i<pend.length;i+=400){ const b=writeBatch(fs); for(const [ref,u] of pend.slice(i,i+400)) b.update(ref,{responsableUid:u}); await b.commit(); }
-       console.info(`Responsables reparados: ${pend.length}`); }
-  catch(e){ console.warn("No se pudieron reparar responsables",e); }
-  finally{ reparado=false; }
-}
-
-/* ---------- recordatorio de respaldo semanal ---------- */
-function avisoRespaldo(){
-  const ult=Number(store.get("ultimoRespaldo")||0), dias=(Date.now()-ult)/86400000;
-  if(dias<7) return;
-  setTimeout(()=>flash(ult?`Tu último respaldo fue hace ${Math.floor(dias)} días. Usa "Descargar Excel" y guárdalo en tu carpeta de respaldos.`:`Haz tu respaldo semanal: usa "Descargar Excel" y guárdalo en tu carpeta de respaldos.`,"warn"),1500);
-}
+});
 
 function teardown(){
   unsubs.forEach(f=>{try{f()}catch(e){}}); unsubs=[];
   if(logUnsub){logUnsub();logUnsub=null;} if(comUnsub){comUnsub();comUnsub=null;}
   rows=new Map(); tasks=new Map(); deps=new Map(); depsLoaded=false; equipo=[]; team=[]; loaded=false; equipoLoaded=false; tasksLoaded=false; selected.clear();
-  closeDrawer(); refreshSelects.done=false; reparado=false;
+  closeDrawer(); refreshSelects.done=false;
 }
 
 function start(){
   unsubs.push(onSnapshot(collection(fs,C_EQUIPO), s=>{
-    equipo = s.docs.map(d=>({uid:d.id, nombre:String(d.data().nombre||""), usuario:String(d.data().usuario||""), rol:d.data().rol==="supervisor"?"supervisor":"colaborador", debeCambiarPass:d.data().debeCambiarPass===true})).filter(e=>e.nombre).sort((a,b)=>a.nombre.localeCompare(b.nombre,"es"));
+    equipo = s.docs.map(d=>({uid:d.id, nombre:String(d.data().nombre||""), usuario:String(d.data().usuario||""), rol:d.data().rol==="supervisor"?"supervisor":"colaborador"})).filter(e=>e.nombre).sort((a,b)=>a.nombre.localeCompare(b.nombre,"es"));
     team = equipo.filter(e=>e.rol!=="supervisor").map(e=>e.nombre); equipoLoaded=true;
-    refreshSelects(); render(); renderTeam(); repararResponsables();
+    refreshSelects(); render(); renderTeam();
   }, e=>{console.error(e); setLive(false);}));
 
-  const qListas = esJefe ? query(collection(fs,C_LISTAS),limit(1000)) : query(collection(fs,C_LISTAS),where("responsableUid","==",me.uid),limit(1000));
-  unsubs.push(onSnapshot(qListas, s=>{
+  unsubs.push(onSnapshot(query(collection(fs,C_LISTAS),limit(1000)), s=>{
     if(loaded) for(const ch of s.docChanges()){ if(ch.type!=="modified") continue; const x=ch.doc.data()||{}; const prev=rows.get(ch.doc.id);
       if(x.actualizadoPor && x.actualizadoPor!==me.uid && x.actualizado && x.actualizado!==prev?.actualizado) toast(x.actualizadoPorNombre, `actualizó la lista ${x.lista}${x.ultimaNota?": "+x.ultimaNota:""}`);
       const ab=x.avisoBitacora; if(ab && ab.ts && ab.porUid!==me.uid && ab.ts!==prev?.avisoBitacora?.ts) toast(ab.porNombre, ab.texto);
       const uc=x.ultimoComentario; if(uc && uc.ts && uc.porUid!==me.uid && uc.ts!==prev?.ultimoComentario?.ts) toast(uc.porNombre, `comentó en la lista ${x.lista}: ${uc.texto}`); }
     setLive(true);
     rows=new Map(s.docs.map(d=>{const x=d.data(); return [d.id,{id:d.id,lista:x.lista??Number(d.id),dependencia:String(x.dependencia||""),financiera:String(x.financiera||"Otros"),convenio:String(x.convenio||x.dependencia||""),fecha:String(x.fecha||""),importe:Number(x.importe)||0,estatusOrigen:String(x.estatusOrigen||""),estatus:ST[x.estatus]?x.estatus:normSt(x.estatus),responsable:String(x.responsable||""),responsableUid:String(x.responsableUid||""),promesa:String(x.promesa||""),depositado:Number(x.depositado)||0,ultimaNota:String(x.ultimaNota||""),actualizado:String(x.actualizado||""),comentarios:Math.max(0,Number(x.comentarios)||0),ultimoComentario:x.ultimoComentario||null,avisoBitacora:x.avisoBitacora||null}];}));
-    loaded=true; refreshSelects(); render(); repararResponsables();
+    loaded=true; refreshSelects(); render();
   }, e=>{ console.error(e); setLive(false); $("tb").innerHTML='<tr><td colspan="9" class="empty">No se pudieron cargar las listas. Revisa tu conexión y recarga la página.</td></tr>'; }));
 
-  const qTareas = esJefe ? query(collection(fs,C_TAREAS),limit(1000)) : query(collection(fs,C_TAREAS),where("responsableUid","==",me.uid),limit(1000));
-  unsubs.push(onSnapshot(qTareas, s=>{
+  unsubs.push(onSnapshot(query(collection(fs,C_TAREAS),limit(1000)), s=>{
     if(tasksLoaded) for(const ch of s.docChanges()){ const x=ch.doc.data(); if(!x||x.actualizadoPor===me.uid) continue; const va=$("viewAs").value;
       if(ch.type==="added"){ if(!va||x.responsable===va) toast(x.actualizadoPorNombre,`asignó una tarea a ${x.responsable}: ${x.titulo}`); }
       else if(ch.type==="modified"){ const p=tasks.get(ch.doc.id); if(p&&p.estado!==x.estado) toast(x.actualizadoPorNombre,`movió “${x.titulo}” a ${x.estado}`); else if(p&&x.avance&&p.avance!==x.avance) toast(x.actualizadoPorNombre,`registró avance en “${x.titulo}”: ${x.avance}`); } }
     tasks=new Map(s.docs.map(d=>{ const x=d.data(); return [d.id,{id:d.id,titulo:String(x.titulo||""),detalle:String(x.detalle||""),responsable:String(x.responsable||""),responsableUid:String(x.responsableUid||""),vence:String(x.vence||""),prioridad:["Alta","Media","Baja"].includes(x.prioridad)?x.prioridad:"Media",lista:String(x.lista||""),estado:TE.includes(x.estado)?x.estado:"Pendiente",avance:String(x.avance||""),completada:String(x.completada||"")}]; }));
-    tasksLoaded=true; renderTasks(); renderDrawerTasks(); repararResponsables();
+    tasksLoaded=true; renderTasks(); renderDrawerTasks();
   }, e=>{console.error(e); setLive(false);}));
 
-  const qDeps = esJefe ? query(collection(fs,C_DEPS),limit(2000)) : query(collection(fs,C_DEPS),where("responsableUid","==",me.uid),limit(2000));
-  unsubs.push(onSnapshot(qDeps, s=>{
-    deps=new Map(s.docs.map(d=>{ const x=d.data(); return [d.id,{id:d.id,fecha:String(x.fecha||""),importe:Number(x.importe)||0,concepto:String(x.concepto||""),referencia:String(x.referencia||""),lista:String(x.lista||""),aplicado:String(x.aplicado||""),aplicadoPor:String(x.aplicadoPor||""),estatusAntes:String(x.estatusAntes||""),archivado:!!x.archivado,responsableUid:String(x.responsableUid||""),noLista:!!x.noLista,noListaPor:String(x.noListaPor||""),noListaEl:String(x.noListaEl||""),responsable:String(x.responsable||""),asignadoPor:String(x.asignadoPor||"")}]; }));
-    depsLoaded=true; renderDeps(); renderDrawerDeps(); repararResponsables();
+  unsubs.push(onSnapshot(query(collection(fs,C_DEPS),limit(2000)), s=>{
+    deps=new Map(s.docs.map(d=>{ const x=d.data(); return [d.id,{id:d.id,fecha:String(x.fecha||""),importe:Number(x.importe)||0,concepto:String(x.concepto||""),referencia:String(x.referencia||""),lista:String(x.lista||""),aplicado:String(x.aplicado||""),aplicadoPor:String(x.aplicadoPor||""),estatusAntes:String(x.estatusAntes||""),archivado:!!x.archivado}]; }));
+    depsLoaded=true; renderDeps(); renderDrawerDeps();
   }, e=>{console.error(e);}));
 }
 
@@ -747,7 +624,7 @@ function refreshSelects(){
   fillSelect($("nWho"),team,1);
   { const s=$("nLista"), cur=s.value; s.innerHTML='<option value="">Ninguna</option>'+[...rows.values()].sort((a,b)=>a.convenio.localeCompare(b.convenio,"es")||a.lista-b.lista).map(r=>`<option value="${esc(r.id)}">${esc(r.lista)} · ${esc(r.convenio)}</option>`).join(""); s.value=cur; }
   if(!refreshSelects.done && me && loaded && equipoLoaded){
-    const saved=store.get("viewAs:"+me.uid); const def = !esJefe ? "" : (saved!==null ? saved : "");
+    const saved=store.get("viewAs:"+me.uid); const def = saved!==null ? saved : (esJefe?"":me.nombre);
     if([...$("viewAs").options].some(o=>o.value===def)) $("viewAs").value=def;
     refreshSelects.done=true;
   }
@@ -945,7 +822,7 @@ function openTeam(){
        ${isAdmin?`<label>Tipo de usuario<select id="tmRol"><option value="colaborador">Colaborador: ve y registra su seguimiento</option><option value="supervisor">Supervisor: ve y maneja todo, menos tus pestañas personales</option></select></label>`:""}
        <div class="two">
          <label>Usuario<input id="tmUser" maxlength="30" autocapitalize="none" spellcheck="false" placeholder="sin espacios ni acentos"></label>
-         <label>Contraseña temporal<input id="tmPass" minlength="10" placeholder="mínimo 10, letras y números"></label>
+         <label>Contraseña<input id="tmPass" minlength="6" placeholder="mínimo 6 caracteres"></label>
        </div>
        <div style="display:flex;justify-content:flex-end"><button class="primary" id="tmGo">Dar de alta</button></div>
        <div id="tmMsg" hidden></div>
@@ -963,7 +840,7 @@ async function altaColaborador(e){
   const nombre=$("tmNombre").value.trim(), usuario=$("tmUser").value.trim().toLowerCase(), pass=$("tmPass").value;
   const msg=(t,k)=>{ $("tmMsg").className="msg "+k; $("tmMsg").textContent=t; $("tmMsg").hidden=false; };
   if(!nombre||!/^[a-z0-9._-]{3,30}$/.test(usuario)){ msg("Escribe el nombre y un usuario de 3 a 30 letras o números, sin espacios ni acentos.","err"); return; }
-  { const d=passDebil(pass); if(d){ msg(d,"err"); return; } }
+  if(pass.length<6){ msg("La contraseña debe tener al menos 6 caracteres.","err"); return; }
   if(team.some(t=>t.toLowerCase()===nombre.toLowerCase())){ msg("Ya hay alguien con ese nombre en el equipo.","err"); return; }
   $("tmGo").disabled=true;
   let tempApp=null;
@@ -972,9 +849,9 @@ async function altaColaborador(e){
     const tempAuth = getAuth(tempApp);
     const cred = await createUserWithEmailAndPassword(tempAuth, usuario+DOMINIO, pass);
     const rol = (isAdmin && $("tmRol")?.value==="supervisor") ? "supervisor" : "colaborador";
-    await setDoc(doc(fs,C_EQUIPO,cred.user.uid), {nombre, usuario, rol, creado:nowIso(), debeCambiarPass:true});
+    await setDoc(doc(fs,C_EQUIPO,cred.user.uid), {nombre, usuario, rol, creado:nowIso()});
     await tempAuth.signOut();
-    msg(`Listo. Usuario: ${usuario} · Contraseña temporal: ${pass}. Compártela por un medio seguro (en persona o llamada, no por chat de grupo). Al entrar por primera vez se le pedirá crear la suya.`,"ok");
+    msg(`Listo. Usuario: ${usuario} · Contraseña: ${pass}. Compártelos por un medio seguro.`,"ok");
     $("tmNombre").value=""; $("tmUser").value=""; $("tmPass").value=""; delete $("tmUser").dataset.touched;
   }catch(err){
     console.error(err);
@@ -984,21 +861,17 @@ async function altaColaborador(e){
 function renderTeam(){
   const el=$("tList"); if(!el) return;
   el.innerHTML = equipo.length? equipo.map(t=>{const n=[...rows.values()].filter(r=>r.responsable===t.nombre&&r.estatus!=="Depositado").length; const sup=t.rol==="supervisor"; const puedeQuitar=isAdmin||!sup;
-     return `<div class="row"><span>${esc(t.nombre)} ${sup?'<span class="chip media">Supervisor</span>':""} <span class="fin">· ${esc(t.usuario)}${sup?"":` · ${n} listas abiertas`}</span></span><span class="dacts">${isAdmin?`<button class="ghost" style="padding:4px 9px;font-size:12px" data-rol="${esc(t.uid)}">${sup?"Hacer colaborador":"Hacer supervisor"}</button>`:""}${puedeQuitar?`<button class="ghost" style="padding:4px 9px;font-size:12px" data-pw="${esc(t.uid)}" title="Al entrar se le pedirá crear una contraseña nueva">${t.debeCambiarPass?"Cambio pendiente":"Pedir cambio de contraseña"}</button>`:""}${puedeQuitar?`<button class="ghost" style="padding:4px 9px;font-size:12px" data-rm="${esc(t.uid)}">${confirmQuitar===t.uid?"Confirmar":"Quitar acceso"}</button>`:""}</span></div>`}).join("")
+     return `<div class="row"><span>${esc(t.nombre)} ${sup?'<span class="chip media">Supervisor</span>':""} <span class="fin">· ${esc(t.usuario)}${sup?"":` · ${n} listas abiertas`}</span></span><span class="dacts">${isAdmin?`<button class="ghost" style="padding:4px 9px;font-size:12px" data-rol="${esc(t.uid)}">${sup?"Hacer colaborador":"Hacer supervisor"}</button>`:""}${puedeQuitar?`<button class="ghost" style="padding:4px 9px;font-size:12px" data-rm="${esc(t.uid)}">${confirmQuitar===t.uid?"Confirmar":"Quitar acceso"}</button>`:""}</span></div>`}).join("")
    : '<div class="fin">Aún no hay colaboradores.</div>';
   el.querySelectorAll("[data-rol]").forEach(b=>b.onclick=async()=>{
     const t=equipo.find(e=>e.uid===b.dataset.rol); if(!t) return;
     try{ await updateDoc(doc(fs,C_EQUIPO,t.uid),{rol:t.rol==="supervisor"?"colaborador":"supervisor"}); flash(`${t.nombre} ahora es ${t.rol==="supervisor"?"colaborador":"supervisor"}. El cambio aplica la próxima vez que entre.`); }catch(e){ handleWriteErr(e); }
   });
-  el.querySelectorAll("[data-pw]").forEach(b=>b.onclick=async()=>{
-    const t=equipo.find(e=>e.uid===b.dataset.pw); if(!t||t.debeCambiarPass) return;
-    try{ await updateDoc(doc(fs,C_EQUIPO,t.uid),{debeCambiarPass:true}); flash(`La próxima vez que ${t.nombre} entre, tendrá que crear una contraseña nueva.`); }catch(e){ handleWriteErr(e); }
-  });
   el.querySelectorAll("[data-rm]").forEach(b=>b.onclick=async()=>{
     const uid=b.dataset.rm;
     if(confirmQuitar!==uid){ confirmQuitar=uid; renderTeam(); setTimeout(()=>{ if(confirmQuitar===uid){confirmQuitar=null;renderTeam();} },4000); return; }
     confirmQuitar=null;
-    try{ await deleteDoc(doc(fs,C_EQUIPO,uid)); flash("Acceso retirado. Sus listas conservan su nombre hasta que las reasignes. Recuerda desactivar también su cuenta en Firebase → Authentication."); }catch(e){ handleWriteErr(e); }
+    try{ await deleteDoc(doc(fs,C_EQUIPO,uid)); flash("Acceso retirado. Sus listas y tareas conservan su nombre hasta que las reasignes."); }catch(e){ handleWriteErr(e); }
   });
 }
 
@@ -1009,7 +882,7 @@ function openPass(){
   $("drawer").innerHTML=`<div class="dhead"><div><div class="eyebrow">Mi cuenta</div><h3>Cambiar contraseña</h3></div><button class="x" id="dClose" aria-label="Cerrar">✕</button></div>
    <div class="dbody"><form class="form" id="pForm">
      <label>Contraseña actual<input type="password" id="pOld" autocomplete="current-password"></label>
-     <label>Contraseña nueva<input type="password" id="pNew" autocomplete="new-password" minlength="10" placeholder="mínimo 10, letras y números"></label>
+     <label>Contraseña nueva<input type="password" id="pNew" autocomplete="new-password" minlength="6"></label>
      <label>Repite la nueva<input type="password" id="pNew2" autocomplete="new-password"></label>
      <div id="pMsg" hidden></div>
      <div style="display:flex;justify-content:flex-end"><button class="primary" id="pGo">Guardar</button></div>
@@ -1018,8 +891,7 @@ function openPass(){
   $("pForm").onsubmit=async e=>{
     e.preventDefault(); const msg=(t,k)=>{ $("pMsg").className="msg "+k; $("pMsg").textContent=t; $("pMsg").hidden=false; };
     const a=$("pOld").value, n=$("pNew").value, n2=$("pNew2").value;
-    { const d=passDebil(n); if(d) return msg(d,"err"); }
-    if(n===a) return msg("La nueva contraseña debe ser distinta a la actual.","err");
+    if(n.length<6) return msg("La nueva contraseña debe tener al menos 6 caracteres.","err");
     if(n!==n2) return msg("Las contraseñas nuevas no coinciden.","err");
     $("pGo").disabled=true;
     try{ await reauthenticateWithCredential(auth.currentUser, EmailAuthProvider.credential(auth.currentUser.email,a)); await updatePassword(auth.currentUser,n); msg("Contraseña actualizada.","ok"); $("pForm").reset(); }
@@ -1070,13 +942,8 @@ async function importFile(file){
   }catch(e){ console.error(e); e?.code?handleWriteErr(e):flash("No se pudo leer el archivo. Revisa que tenga las columnas Lista, Dependencia, Fecha Descuento, Importe y Estatus.","err"); }
 }
 function exportXlsx(){
-  if(!esJefe){ flash("Solo la supervisión puede descargar el Excel.","err"); return; }
   if(!window.XLSX){flash("No se pudo cargar el generador de Excel. Recarga la página.","err");return;}
   const wb=XLSX.utils.book_new();
-  wb.Props={Title:"Seguimiento de Convenios - CONFIDENCIAL",Subject:"Uso interno exclusivo",Author:me.nombre,Company:"FIMUBAC",CreatedDate:new Date()};
-  const aviso=XLSX.utils.aoa_to_sheet([["CONFIDENCIAL - USO INTERNO EXCLUSIVO"],[""],["Este archivo contiene información de cobranza y datos de clientes protegidos por la Ley Federal de Protección de Datos Personales."],["No lo reenvíes, no lo subas a sitios públicos y bórralo de equipos compartidos al terminar."],[""],["Descargado por:",me.nombre],["Fecha:",new Date().toLocaleString("es-MX")]]);
-  aviso["!cols"]=[{wch:20},{wch:90}];
-  XLSX.utils.book_append_sheet(wb,aviso,"CONFIDENCIAL");
   const out=filtered().sort((a,b)=>dias(b.fecha)-dias(a.fecha)).map(r=>({Lista:r.lista,Financiera:r.financiera,Convenio:r.convenio,"Fecha descuento":r.fecha,"Días":dias(r.fecha),Importe:r.importe,Depositado:r.depositado||0,Pendiente:pend(r),"Estatus archivo":r.estatusOrigen,"Estatus actual":r.estatus,Responsable:r.responsable||"Sin asignar","Promesa de pago":r.promesa||"","Último seguimiento":r.ultimaNota||"","Comentarios":r.comentarios||0,"Último comentario":r.ultimoComentario?`${r.ultimoComentario.porNombre}: ${r.ultimoComentario.texto}`:"","Actualizado":r.actualizado?r.actualizado.slice(0,10):""}));
   const ws=XLSX.utils.json_to_sheet(out); ws["!cols"]=[{wch:8},{wch:18},{wch:42},{wch:12},{wch:6},{wch:14},{wch:14},{wch:14},{wch:14},{wch:16},{wch:18},{wch:14},{wch:50},{wch:11},{wch:50},{wch:12}];
   XLSX.utils.book_append_sheet(wb,ws,"Listas");
@@ -1084,11 +951,10 @@ function exportXlsx(){
   const tk=[...tasks.values()].filter(t=>!va||t.responsable===va).map(t=>({Tarea:t.titulo,Detalle:t.detalle,Responsable:t.responsable,Prioridad:t.prioridad,"Fecha límite":t.vence,Estado:t.estado,Avance:t.avance,"Lista":t.lista,"Hecha el":t.completada?t.completada.slice(0,10):""}));
   const ws2=XLSX.utils.json_to_sheet(tk.length?tk:[{Tarea:"Sin tareas"}]); ws2["!cols"]=[{wch:40},{wch:40},{wch:18},{wch:10},{wch:12},{wch:12},{wch:40},{wch:8},{wch:12}];
   XLSX.utils.book_append_sheet(wb,ws2,"Tareas");
-  const dp=[...deps.values()].sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(d=>{ const r=rows.get(d.lista); return {Carga:d.archivado?"Anterior":"Actual",Fecha:d.fecha,Concepto:d.concepto,Referencia:d.referencia,Importe:d.importe,Estado:d.lista?"Aplicado":d.noLista?"No es de lista":"Por aplicar",Lista:d.lista,Convenio:r?r.convenio:"",Responsable:r?r.responsable:(d.responsable||""),"Aplicado por":d.aplicadoPor,"Aplicado el":d.aplicado?d.aplicado.slice(0,10):""}; });
+  const dp=[...deps.values()].sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(d=>{ const r=rows.get(d.lista); return {Carga:d.archivado?"Anterior":"Actual",Fecha:d.fecha,Concepto:d.concepto,Referencia:d.referencia,Importe:d.importe,Estado:d.lista?"Aplicado":"Por aplicar",Lista:d.lista,Convenio:r?r.convenio:"",Responsable:r?r.responsable:"","Aplicado por":d.aplicadoPor,"Aplicado el":d.aplicado?d.aplicado.slice(0,10):""}; });
   const ws3=XLSX.utils.json_to_sheet(dp.length?dp:[{Fecha:"Sin depósitos"}]); ws3["!cols"]=[{wch:9},{wch:12},{wch:44},{wch:18},{wch:14},{wch:12},{wch:8},{wch:36},{wch:18},{wch:18},{wch:12}];
   XLSX.utils.book_append_sheet(wb,ws3,"Depósitos");
-  XLSX.writeFile(wb,`CONFIDENCIAL_seguimiento_convenios_${new Date().toISOString().slice(0,10)}.xlsx`);
-  store.set("ultimoRespaldo",String(Date.now()));
+  XLSX.writeFile(wb,`seguimiento_convenios_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
 /* ---------- tareas ---------- */
@@ -1151,16 +1017,14 @@ async function saveTask(id,patch){ try{ await updateDoc(doc(fs,C_TAREAS,id), {..
 
 /* ---------- depósitos ---------- */
 const normTxt=s=>String(s??"").toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^A-Z0-9 ]/g," ").replace(/\s+/g," ").trim();
-const STOP=new Set(["DEL","LAS","LOS","ING","INGR","GOB","GOBIERNO","SECTOR","NOMINA","DEPOSITO","PAGO","SPEI","TRANSFERENCIA","REF","QNA","CDMX","ESTADO","SERVICIOS","POR","CREDITO","CREDITOS","PARA","CON"]);
+const STOP=new Set(["DEL","LAS","LOS","ING","INGR","GOB","GOBIERNO","SECTOR","NOMINA","DEPOSITO","PAGO","SPEI","TRANSFERENCIA","REF","QNA","CDMX","ESTADO","SERVICIOS"]);
 const toks=s=>new Set(normTxt(s).split(" ").filter(w=>w.length>=3&&!STOP.has(w)&&!/^\d+$/.test(w)));
 const r2=n=>Math.round(n*100)/100;
 function suggest(dp){
-  if(dp.noLista) return null;
   const dt=toks(dp.concepto+" "+dp.referencia); let best=null;
   for(const r of rows.values()){
     const p=pend(r); if(r.estatus==="Depositado"||p<=0) continue;
-    const conv=(r.convenio&&r.convenio!==r.dependencia)?r.convenio:splitDep(r.dependencia).conv;
-    let ov=0; for(const w of toks(conv)) if(dt.has(w)) ov++;   // solo el convenio: el nombre de la financiera (ej. UNICREDIX) no cuenta
+    let ov=0; for(const w of toks(r.dependencia)) if(dt.has(w)) ov++;
     const exacto=Math.abs(p-dp.importe)<1;
     const sc=(exacto?10:0)+ov*3+(!exacto&&ov&&dp.importe<p?1:0);
     if(sc>0 && (!best||sc>best.sc||(sc===best.sc&&dias(r.fecha)>dias(best.r.fecha)))) best={r,sc,exacto,ov};
@@ -1172,8 +1036,8 @@ function suggest(dp){
 }
 function renderDeps(){
   if(!depsLoaded||!loaded) return;
-  const all=[...deps.values()].filter(d=>!d.archivado||d.noLista);   // los "No es de lista" no tienen lista donde consultarse: siempre visibles   // solo la carga actual; lo aplicado antes queda en cada lista
-  const pendAll=all.filter(d=>!d.lista&&!d.noLista);
+  const all=[...deps.values()].filter(d=>!d.archivado);   // solo la carga actual; lo aplicado antes queda en cada lista
+  const pendAll=all.filter(d=>!d.lista);
   $("dBadge").hidden=!(esJefe&&pendAll.length); $("dBadge").textContent=pendAll.length;
   { const s=$("dFecha"), cur=s.value; const fechas=[...new Set(all.map(d=>d.fecha).filter(Boolean))].sort().reverse();
     s.innerHTML='<option value="">Todas</option>'+fechas.map(f=>`<option value="${esc(f)}">${fmtD(f)}</option>`).join(""); if(fechas.includes(cur)) s.value=cur; }
@@ -1181,11 +1045,11 @@ function renderDeps(){
   let base=all.filter(d=>!f||d.fecha===f);
   if(va) base=base.filter(d=>!d.lista||rows.get(d.lista)?.responsable===va);
   const sum=a=>a.reduce((t,d)=>t+d.importe,0);
-  const bp=base.filter(d=>!d.lista&&!d.noLista), bo=base.filter(d=>d.lista);
+  const bp=base.filter(d=>!d.lista), bo=base.filter(d=>d.lista);
   $("dkTot").textContent=mx0.format(sum(base)); $("dkTotD").textContent=`${base.length} depósitos${f?" del "+fmtD(f):""}`;
   $("dkPend").textContent=mx0.format(sum(bp)); $("dkPendD").textContent=`${bp.length} sin lista asignada`;
   $("dkOk").textContent=mx0.format(sum(bo)); $("dkOkD").textContent=`${bo.length} ya sumados a sus listas`;
-  const list=base.filter(d=>(!est||(est==="pend"?(!d.lista&&!d.noLista):est==="nol"?d.noLista:!!d.lista))&&(!q||normTxt(d.concepto+" "+d.referencia+" "+d.importe.toFixed(2)).includes(q)))
+  const list=base.filter(d=>(!est||(est==="pend"?!d.lista:!!d.lista))&&(!q||normTxt(d.concepto+" "+d.referencia+" "+d.importe.toFixed(2)).includes(q)))
     .sort((a,b)=>{
       const v=d=> depSort.k==="importe"?d.importe : depSort.k==="estado"?(d.lista?1:0) : depSort.k==="lista"?(d.lista?Number(d.lista):Infinity) : depSort.k==="concepto"?normTxt(d.concepto||"~") : d.fecha;
       const x=v(a), y=v(b); const c=(typeof x==="number"&&typeof y==="number")?x-y:String(x).localeCompare(String(y),"es");
@@ -1200,18 +1064,12 @@ function renderDeps(){
         <td><span class="pill s-ok">Aplicado</span>${d.aplicadoPor?`<div class="fin">por ${esc(d.aplicadoPor)}</div>`:""}</td>
         <td><button class="chip" data-dl="${esc(d.lista)}">Lista ${esc(d.lista)}${r?" · "+esc(r.convenio):""}</button>${r?.responsable?`<div class="fin">${esc(r.responsable)}</div>`:""}</td>
         <td><div class="dacts">${esJefe?`<button class="ghost" data-dact="undo">${confirmDep===d.id?"Confirmar":"Desaplicar"}</button>`:""}</div></td></tr>`; }
-    if(d.noLista){
-      return `<tr data-dep="${esc(d.id)}"><td>${fmtD(d.fecha)}</td><td><div>${esc(d.concepto||"—")}</div>${d.referencia?`<div class="fin">${esc(d.referencia)}</div>`:""}</td><td class="r num">${mx.format(d.importe)}</td>
-        <td><span class="pill s-parcial">No es de lista</span>${d.noListaPor?`<div class="fin">por ${esc(d.noListaPor)}</div>`:""}</td>
-        <td>${d.responsable?`<b>${esc(d.responsable)}</b>${d.asignadoPor?`<div class="fin">se lo pasó ${esc(d.asignadoPor)}</div>`:""}`:"—"}<div class="sug weak">Pago individual: no se suma a ninguna lista</div>
-          ${esJefe?`<select class="dsel" data-nolwho="${esc(d.id)}" aria-label="Pasar este depósito a"><option value="">${d.responsable?"Cambiar a…":"Pasar a…"}</option>${team.map(t=>`<option ${t===d.responsable?"selected":""}>${esc(t)}</option>`).join("")}${d.responsable?'<option value="__quitar">Quitar asignación</option>':""}</select>`:""}</td>
-        <td><div class="dacts">${esJefe?`<button class="primary" data-dact="nolAsig">${d.responsable?"Cambiar":"Pasar"}</button><button class="ghost" data-dact="nolUndo">Regresar a por aplicar</button><button class="ghost" data-dact="del">${confirmDep===d.id?"Confirmar":"Borrar"}</button>`:""}</div></td></tr>`; }
     const sg=suggest(d); const sel=depChoice[d.id]??(sg?sg.r.id:"");
     return `<tr data-dep="${esc(d.id)}"><td>${fmtD(d.fecha)}</td><td><div>${esc(d.concepto||"—")}</div>${d.referencia?`<div class="fin">${esc(d.referencia)}</div>`:""}</td><td class="r num">${mx.format(d.importe)}</td>
       <td><span class="pill s-sindep">Por aplicar</span></td>
       <td>${esJefe?`<select class="dsel" data-dsel="${esc(d.id)}" aria-label="Lista para este depósito">${optsFor(sel)}</select>`:(sg?`Lista ${esc(sg.r.lista)} · ${esc(sg.r.convenio)}`:"—")}
         ${sg?`<div class="sug ${sg.fuerte?"":"weak"}">Sugerida: lista ${esc(sg.r.lista)} · ${sg.tipo}</div>`:'<div class="sug weak">Sin sugerencia: elige la lista</div>'}</td>
-      <td><div class="dacts">${esJefe?`<button class="primary" data-dact="apply">Aplicar</button><button class="ghost" data-dact="nol" title="Pago individual u otro depósito que no corresponde a ninguna lista">No es de lista</button><button class="ghost" data-dact="del">${confirmDep===d.id?"Confirmar":"Borrar"}</button>`:""}</div></td></tr>`;
+      <td><div class="dacts">${esJefe?`<button class="primary" data-dact="apply">Aplicar</button><button class="ghost" data-dact="del">${confirmDep===d.id?"Confirmar":"Borrar"}</button>`:""}</div></td></tr>`;
   }).join("") : `<tr><td colspan="6" class="empty">${deps.size?"Ningún depósito coincide con los filtros.":(esJefe?"Aún no hay depósitos. Usa “Subir depósitos (Excel)” o “Agregar a mano”. Cada archivo que subas reemplaza al anterior.":"Aún no hay depósitos registrados.")}</td></tr>`;
   $("dTf").innerHTML = list.length? `<tr><td colspan="2">${list.length} depósitos</td><td class="r num">${mx.format(sum(list))}</td><td colspan="3"></td></tr>`:"";
   $("btnDepAuto").disabled = !pendAll.some(d=>suggest(d)?.fuerte);
@@ -1228,7 +1086,7 @@ async function applyDep(id, listaId){
   const f=firma(); const nota=`Depósito del ${fmtD(d.fecha)} por ${mx.format(d.importe)} aplicado`;
   const b=writeBatch(fs);
   b.update(doc(fs,C_LISTAS,r.id), {depositado:nuevo, estatus:est, ultimaNota:nota, ...f});
-  b.update(doc(fs,C_DEPS,id), {lista:r.id, responsableUid:uidDe(r.responsable)||r.responsableUid||"", aplicado:f.actualizado, aplicadoPor:me.nombre, estatusAntes:r.estatus});
+  b.update(doc(fs,C_DEPS,id), {lista:r.id, aplicado:f.actualizado, aplicadoPor:me.nombre, estatusAntes:r.estatus});
   b.set(doc(collection(fs,C_LISTAS,r.id,"bitacora")), {ts:f.actualizado, porUid:me.uid, porNombre:me.nombre, texto:"", cambios:`${nota} · Depositado: ${mx.format(nuevo)} · Estatus: ${r.estatus} → ${est}`});
   await b.commit();
   r.depositado=nuevo; r.estatus=est; d.lista=r.id;   // por si se aplican varios seguidos antes de que llegue la actualización
@@ -1243,7 +1101,7 @@ async function unapplyDep(id){
     b.update(doc(fs,C_LISTAS,r.id), {depositado:nuevo, estatus:est, ultimaNota:nota, ...f});
     b.set(doc(collection(fs,C_LISTAS,r.id,"bitacora")), {ts:f.actualizado, porUid:me.uid, porNombre:me.nombre, texto:"", cambios:`${nota} · Depositado: ${mx.format(nuevo)} · Estatus: ${r.estatus} → ${est}`});
   }
-  b.update(doc(fs,C_DEPS,id), {lista:"", responsableUid:"", aplicado:"", aplicadoPor:"", estatusAntes:""});
+  b.update(doc(fs,C_DEPS,id), {lista:"", aplicado:"", aplicadoPor:"", estatusAntes:""});
   await b.commit();
 }
 const hashStr=s=>{ let h=5381; for(let i=0;i<s.length;i++) h=((h<<5)+h+s.charCodeAt(i))>>>0; return h.toString(36); };
@@ -1291,16 +1149,16 @@ async function importDeps(file){
       const id="d"+hashStr([fecha,importe.toFixed(2),concepto,referencia].join("|"));
       const [fy,fm,fd]=fecha.split("-"); const fechaVolteada=(+fd<=12 && fd!==fm)?`${fy}-${fd}-${fm}`:"";
       const idVolteado=fechaVolteada?"d"+hashStr([fechaVolteada,importe.toFixed(2),concepto,referencia].join("|")):"";
-      if(deps.get(id)?.lista||deps.get(id)?.noLista||(idVolteado&&(deps.get(idVolteado)?.lista||deps.get(idVolteado)?.noLista))||nuevos.some(n=>n.id===id)){ dup++; continue; }   // ya aplicado antes (aunque se haya leído con la fecha al revés): no se vuelve a cargar
+      if(deps.get(id)?.lista||(idVolteado&&deps.get(idVolteado)?.lista)||nuevos.some(n=>n.id===id)){ dup++; continue; }   // ya aplicado antes (aunque se haya leído con la fecha al revés): no se vuelve a cargar
       nuevos.push({id, d:{fecha,importe,concepto,referencia,lista:"",aplicado:"",aplicadoPor:"",estatusAntes:"",cargado:nowIso(),cargadoPor:me.nombre,archivo:file.name.slice(0,120)}});
     }
     if(!nuevos.length){ flash(dup?`Esos ${dup} depósitos ya se habían aplicado a sus listas; no se volvieron a cargar.`:"El archivo no trae depósitos con fecha e importe.","err"); return; }
     const actuales=[...deps.values()].filter(d=>!d.archivado);
-    const sinAplicar=actuales.filter(d=>!d.lista&&!d.noLista), aplicados=actuales.filter(d=>d.lista||d.noLista);
+    const sinAplicar=actuales.filter(d=>!d.lista), aplicados=actuales.filter(d=>d.lista);
     if(sinAplicar.length && !window.confirm(`Al subir este archivo se borrarán los ${sinAplicar.length} depósitos anteriores que siguen por aplicar. Los que ya aplicaste se quedan registrados en sus listas. ¿Continuar?`)) return;
     const nuevosIds=new Set(nuevos.map(n=>n.id));
     const ops=[...sinAplicar.filter(d=>!nuevosIds.has(d.id)).map(d=>b=>b.delete(doc(fs,C_DEPS,d.id))),
-               ...aplicados.filter(d=>d.lista).map(d=>b=>b.update(doc(fs,C_DEPS,d.id),{archivado:true})),
+               ...aplicados.map(d=>b=>b.update(doc(fs,C_DEPS,d.id),{archivado:true})),
                ...nuevos.map(n=>b=>b.set(doc(fs,C_DEPS,n.id),n.d))];
     for(let i=0;i<ops.length;i+=400){ const b=writeBatch(fs); ops.slice(i,i+400).forEach(f=>f(b)); await b.commit(); }
     $("dEst").value="pend"; $("dFecha").value="";
@@ -1346,21 +1204,6 @@ $("dTb").addEventListener("click",async e=>{
   const b=e.target.closest("[data-dact]"); if(!b) return; const id=b.closest("[data-dep]").dataset.dep; const a=b.dataset.dact;
   if(a==="apply"){ const sel=b.closest("tr").querySelector("[data-dsel]")?.value; if(!sel){ flash("Elige la lista a la que corresponde el depósito.","err"); return; }
     b.disabled=true; try{ await applyDep(id, sel); delete depChoice[id]; const r=rows.get(sel); flash(`Depósito aplicado a la lista ${r?.lista}. Estatus: ${r?.estatus}.`); }catch(err){ handleWriteErr(err); b.disabled=false; } renderDeps(); }
-  else if(a==="nolAsig"){
-    const v=b.closest("tr").querySelector("[data-nolwho]")?.value;
-    if(!v){ flash("Elige a quién pasarle el depósito.","err"); return; }
-    const who = v==="__quitar" ? "" : v;
-    b.disabled=true;
-    try{ await updateDoc(doc(fs,C_DEPS,id), {responsable:who, responsableUid:who?uidDe(who):"", asignadoPor:who?me.nombre:"", asignadoEl:who?nowIso():""});
-         flash(who?`Depósito pasado a ${who}. Ya lo ve en su pestaña Depósitos.`:"Se quitó la asignación del depósito."); }
-    catch(err){ handleWriteErr(err); b.disabled=false; }
-  }
-  else if(a==="nol"||a==="nolUndo"){
-    b.disabled=true;
-    try{ await updateDoc(doc(fs,C_DEPS,id), a==="nol" ? {noLista:true, noListaPor:me.nombre, noListaEl:nowIso()} : {noLista:false, noListaPor:"", noListaEl:"", responsable:"", responsableUid:"", asignadoPor:"", asignadoEl:""});
-         delete depChoice[id]; flash(a==="nol" ? "Depósito marcado como \"No es de lista\". Ya no aparece en Por aplicar; lo encuentras en el filtro Estado." : "El depósito regresó a Por aplicar."); }
-    catch(err){ handleWriteErr(err); b.disabled=false; }
-  }
   else if(a==="undo"||a==="del"){
     if(confirmDep!==id){ confirmDep=id; renderDeps(); setTimeout(()=>{ if(confirmDep===id){ confirmDep=null; renderDeps(); } },4000); return; }
     confirmDep=null;
