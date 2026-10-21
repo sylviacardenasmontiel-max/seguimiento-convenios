@@ -154,7 +154,12 @@ button.chip{border:1px solid var(--line);color:var(--accent);background:var(--ac
 .kpis.k3{grid-template-columns:repeat(3,minmax(0,1fr))}
 .sug{font-size:11px;color:var(--ok);font-weight:600}
 .sug.weak{color:var(--muted);font-weight:500}
-.dsel{max-width:260px}
+.dsel{max-width:260px;font-size:12.5px;padding:4px 8px}
+.pasline{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:4px;font-size:11px;color:var(--muted);line-height:1.2}
+.pasline b{color:var(--fg)}
+.dsel.mini{max-width:120px;font-size:11px;padding:2px 4px;height:24px}
+button.mini{padding:2px 8px!important;font-size:11px!important;line-height:1.2}
+.pasline .hint{font-size:10.5px;font-style:italic}
 .dacts{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .dacts button{padding:4px 9px;font-size:12px}
 /* ---- Mi control (Hoy / Envío de listas / Entregas) ---- */
@@ -1313,8 +1318,7 @@ function renderDeps(){
       <td><span class="pill s-sindep">Por aplicar</span></td>
       <td>${esJefe?`<select class="dsel" data-dsel="${esc(d.id)}" aria-label="Lista para este depósito">${optsFor(sel)}</select>`:(sg?`Lista ${esc(sg.r.lista)} · ${esc(sg.r.convenio)}`:"—")}
         ${sg?`<div class="sug ${sg.fuerte?"":"weak"}">Sugerida: lista ${esc(sg.r.lista)} · ${sg.tipo}</div>`:'<div class="sug weak">Sin sugerencia: elige la lista</div>'}
-        ${d.responsable?`<div class="fin">Pasado a <b>${esc(d.responsable)}</b>${d.asignadoPor?` · ${esc(d.asignadoPor)}`:""}</div>`:""}
-        ${esJefe?(()=>{ const pre=d.responsable||duenoFin(d); return `<div class="dacts" style="margin-top:6px"><select class="dsel" data-nolwho="${esc(d.id)}" aria-label="Pasar este depósito a" style="max-width:180px"><option value="">${d.responsable?"Cambiar a…":"Pasar a…"}</option>${team.map(t=>`<option ${t===pre?"selected":""}>${esc(t)}</option>`).join("")}${d.responsable?'<option value="__quitar">Quitar</option>':""}</select><button class="ghost" data-dact="nolAsig">${d.responsable?"Cambiar":"Pasar"}</button></div>${!d.responsable&&pre?`<div class="sug weak">Sugerido: pasar a ${esc(pre)} (lleva esa financiera)</div>`:""}`; })():""}</td>
+        ${esJefe&&(!sg||d.responsable)?(()=>{ const pre=d.responsable||duenoFin(d); return `<div class="pasline">${d.responsable?`<span>Pasado a <b>${esc(d.responsable)}</b></span>`:`<span>Pasar a</span>`}<select class="dsel mini" data-nolwho="${esc(d.id)}" aria-label="Pasar este depósito a" title="${d.responsable&&d.asignadoPor?"Lo pasó "+esc(d.asignadoPor):""}"><option value="">${d.responsable?"Cambiar…":"Elegir…"}</option>${team.map(t=>`<option ${t===pre?"selected":""}>${esc(t)}</option>`).join("")}${d.responsable?'<option value="__quitar">Quitar</option>':""}</select><button class="ghost mini" data-dact="nolAsig">${d.responsable?"Cambiar":"Pasar"}</button>${!d.responsable&&pre?`<span class="hint">sugerido: ${esc(pre)}</span>`:""}</div>`; })():(d.responsable?`<div class="fin">Pasado a <b>${esc(d.responsable)}</b></div>`:"")}</td>
       <td><div class="dacts">${esJefe?`<button class="primary" data-dact="apply">Aplicar</button><button class="ghost" data-dact="nol" title="Pago individual u otro depósito que no corresponde a ninguna lista">Marcar sin lista</button><button class="ghost" data-dact="del">${confirmDep===d.id?`Sí, borrar depósito de ${mx0.format(d.importe)}`:"Borrar"}</button>`:""}</div></td></tr>`;
   }).join("") : `<tr><td colspan="6" class="empty">${deps.size?`Ningún depósito coincide con los filtros. <button class="ghost" data-clear="D">Limpiar filtros</button>`:(esJefe?"Aún no hay depósitos. Usa “Subir depósitos (Excel)” o “Agregar a mano”. Cada archivo que subas reemplaza al anterior.":"Aún no hay depósitos registrados.")}</td></tr>`;
   $("dTf").innerHTML = list.length? `<tr><td colspan="2">${list.length} depósitos</td><td class="r num">${mx.format(sum(list))}</td><td colspan="3"></td></tr>`:"";
