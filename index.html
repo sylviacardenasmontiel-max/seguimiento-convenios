@@ -567,7 +567,11 @@ let confirmLog = null;
 let openId = null, logUnsub = null, logEntries = [], comUnsub = null, comEntries = [], confirmCom = null;
 let unsubs = [];
 const TE=["Pendiente","En proceso","Hecha"]; const PR={Alta:0,Media:1,Baja:2};
-const uidDe = nombre => (equipo.find(e=>e.nombre===nombre)||{}).uid || "";
+const normNom = s => String(s||"").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\s+/g," ");
+const uidDe = nombre => { const n=normNom(nombre); if(!n) return ""; const m=equipo.filter(e=>normNom(e.nombre)===n); return m.length===1 ? m[0].uid : (m.find(e=>e.rol!=="supervisor")||m[0]||{}).uid || ""; };
+const nombresDuplicados = () => { const c={}; equipo.forEach(e=>{ const n=normNom(e.nombre); c[n]=(c[n]||0)+1; }); return equipo.filter(e=>c[normNom(e.nombre)]>1).map(e=>e.nombre); };
+// En la vista propia de un colaborador todo lo que llega ya es suyo (se filtra por su usuario), aunque el nombre escrito difiera.
+const esDe = (nombre, va) => !va || nombre===va || normNom(nombre)===normNom(va) || (!esJefe && me && va===me.nombre);
 const firma = () => ({actualizado:nowIso(), actualizadoPor:me.uid, actualizadoPorNombre:me.nombre});
 
 function flash(text, kind="ok"){ const f=$("flash"); f.className="msg "+kind; f.textContent=text; f.hidden=false; clearTimeout(flash.t); flash.t=setTimeout(()=>f.hidden=true, kind==="err"?9000:4000); }
@@ -662,6 +666,7 @@ async function repararResponsables(){
     if(d.noLista){ if(d.responsable){ const u=uidDe(d.responsable); if(u && d.responsableUid!==u) pend.push([doc(fs,C_DEPS,d.id),u]); } continue; }
     const r=d.lista?rows.get(d.lista):null; const u=r?(uidDe(r.responsable)||""):""; if(r && (d.responsableUid||"")!==u) pend.push([doc(fs,C_DEPS,d.id),u]); }
   for(const r of rows.values()){ if(!r.responsable) continue; const u=uidDe(r.responsable); if(u && r.responsableUid!==u) pend.push([doc(fs,C_LISTAS,r.id),u]); }
+  // (uidDe ya compara nombres sin importar mayúsculas, acentos ni espacios)
   for(const t of tasks.values()){ if(!t.responsable) continue; const u=uidDe(t.responsable); if(u && t.responsableUid!==u) pend.push([doc(fs,C_TAREAS,t.id),u]); }
   if(!pend.length){ reparado=false; return; }
   try{ for(let i=0;i<pend.length;i+=400){ const b=writeBatch(fs); for(const [ref,u] of pend.slice(i,i+400)) b.update(ref,{responsableUid:u}); await b.commit(); }
@@ -722,7 +727,7 @@ function start(){
 function filtered(){
   const q=$("q").value.trim().toLowerCase(), fin=$("fFin").value, st=$("fSt").value, who=$("fWho").value, va=$("viewAs").value;
   return [...rows.values()].filter(r=>{
-    if(va && r.responsable!==va) return false;
+    if(!esDe(r.responsable, va)) return false;
     if(fin && r.financiera!==fin) return false;
     if(st==="__open" && r.estatus==="Depositado") return false;
     if(st && st!=="__open" && r.estatus!==st) return false;
@@ -757,7 +762,7 @@ function refreshSelects(){
 function render(){
   if(!loaded) return;
   const va=$("viewAs").value;
-  const base=[...rows.values()].filter(r=>!va||r.responsable===va);
+  const base=[...rows.values()].filter(r=>esDe(r.responsable, va));
   const open=base.filter(r=>r.estatus!=="Depositado");
   const sum=a=>a.reduce((s,r)=>s+pend(r),0);
   $("sub").textContent = `${rows.size} listas · ${team.length} colaborador${team.length===1?"":"es"} · corte al ${today.toLocaleDateString("es-MX",{day:"numeric",month:"long",year:"numeric"})}`;
@@ -985,9 +990,10 @@ async function altaColaborador(e){
 }
 function renderTeam(){
   const el=$("tList"); if(!el) return;
-  el.innerHTML = equipo.length? equipo.map(t=>{const n=[...rows.values()].filter(r=>r.responsable===t.nombre&&r.estatus!=="Depositado").length; const sup=t.rol==="supervisor"; const puedeQuitar=isAdmin||!sup;
+  const dup=nombresDuplicados(); const avisoDup = dup.length ? `<div class="msg err">Hay nombres repetidos en el equipo (${esc([...new Set(dup)].join(", "))}). Las listas se asignan por nombre: quita el acceso del usuario que ya no se use o cámbiale el nombre para distinguirlos.</div>` : "";
+  el.innerHTML = avisoDup + (equipo.length? equipo.map(t=>{const n=[...rows.values()].filter(r=>r.responsable===t.nombre&&r.estatus!=="Depositado").length; const sup=t.rol==="supervisor"; const puedeQuitar=isAdmin||!sup;
      return `<div class="row"><span>${esc(t.nombre)} ${sup?'<span class="chip media">Supervisor</span>':""} <span class="fin">· ${esc(t.usuario)}${sup?"":` · ${n} listas abiertas`}</span></span><span class="dacts">${isAdmin?`<button class="ghost" style="padding:4px 9px;font-size:12px" data-rol="${esc(t.uid)}">${sup?"Hacer colaborador":"Hacer supervisor"}</button>`:""}${puedeQuitar?`<button class="ghost" style="padding:4px 9px;font-size:12px" data-pw="${esc(t.uid)}" title="Al entrar se le pedirá crear una contraseña nueva">${t.debeCambiarPass?"Cambio pendiente":"Pedir cambio de contraseña"}</button>`:""}${puedeQuitar?`<button class="ghost" style="padding:4px 9px;font-size:12px" data-rm="${esc(t.uid)}">${confirmQuitar===t.uid?"Confirmar":"Quitar acceso"}</button>`:""}</span></div>`}).join("")
-   : '<div class="fin">Aún no hay colaboradores.</div>';
+   : '<div class="fin">Aún no hay colaboradores.</div>');
   el.querySelectorAll("[data-rol]").forEach(b=>b.onclick=async()=>{
     const t=equipo.find(e=>e.uid===b.dataset.rol); if(!t) return;
     try{ await updateDoc(doc(fs,C_EQUIPO,t.uid),{rol:t.rol==="supervisor"?"colaborador":"supervisor"}); flash(`${t.nombre} ahora es ${t.rol==="supervisor"?"colaborador":"supervisor"}. El cambio aplica la próxima vez que entre.`); }catch(e){ handleWriteErr(e); }
@@ -1083,7 +1089,7 @@ function exportXlsx(){
   const ws=XLSX.utils.json_to_sheet(out); ws["!cols"]=[{wch:8},{wch:18},{wch:42},{wch:12},{wch:6},{wch:14},{wch:14},{wch:14},{wch:14},{wch:16},{wch:18},{wch:14},{wch:50},{wch:11},{wch:50},{wch:12}];
   XLSX.utils.book_append_sheet(wb,ws,"Listas");
   const va=$("viewAs").value;
-  const tk=[...tasks.values()].filter(t=>!va||t.responsable===va).map(t=>({Tarea:t.titulo,Detalle:t.detalle,Responsable:t.responsable,Prioridad:t.prioridad,"Fecha límite":t.vence,Estado:t.estado,Avance:t.avance,"Lista":t.lista,"Hecha el":t.completada?t.completada.slice(0,10):""}));
+  const tk=[...tasks.values()].filter(t=>esDe(t.responsable, va)).map(t=>({Tarea:t.titulo,Detalle:t.detalle,Responsable:t.responsable,Prioridad:t.prioridad,"Fecha límite":t.vence,Estado:t.estado,Avance:t.avance,"Lista":t.lista,"Hecha el":t.completada?t.completada.slice(0,10):""}));
   const ws2=XLSX.utils.json_to_sheet(tk.length?tk:[{Tarea:"Sin tareas"}]); ws2["!cols"]=[{wch:40},{wch:40},{wch:18},{wch:10},{wch:12},{wch:12},{wch:40},{wch:8},{wch:12}];
   XLSX.utils.book_append_sheet(wb,ws2,"Tareas");
   const dp=[...deps.values()].sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(d=>{ const r=rows.get(d.lista); return {Carga:d.archivado?"Anterior":"Actual",Fecha:d.fecha,Concepto:d.concepto,Referencia:d.referencia,Importe:d.importe,Estado:d.lista?"Aplicado":d.noLista?"No es de lista":"Por aplicar",Lista:d.lista,Convenio:r?r.convenio:"",Responsable:r?r.responsable:(d.responsable||""),"Aplicado por":d.aplicadoPor,"Aplicado el":d.aplicado?d.aplicado.slice(0,10):""}; });
@@ -1127,14 +1133,14 @@ function renderTasks(){
   if(!tasksLoaded) return;
   const va=$("viewAs").value, q=$("tq").value.trim().toLowerCase(), pri=$("tPri").value;
   const all=[...tasks.values()];
-  const mine=all.filter(t=>t.estado!=="Hecha"&&(!va||t.responsable===va));
+  const mine=all.filter(t=>t.estado!=="Hecha"&&esDe(t.responsable, va));
   $("tBadge").hidden=!mine.length; $("tBadge").textContent=mine.length;
   const w={}; for(const t of all) if(t.estado!=="Hecha"){ const k=t.responsable||"Sin asignar"; (w[k]??={n:0,late:0}); w[k].n++; if(isLate(t)) w[k].late++; }
   for(const m of team) w[m]??={n:0,late:0};
   const wl=Object.entries(w).sort((a,b)=>b[1].n-a[1].n); const top=Math.max(1,...wl.map(x=>x[1].n));
   $("tWho").innerHTML = wl.length? wl.map(([k,v])=>`<div class="bar ${va===k?"on":""}" data-who="${esc(k)}" tabindex="0" role="button"><span class="n" title="${esc(k)}">${esc(k)}</span><span class="track">${v.late?`<i style="width:${(v.late/top*100).toFixed(2)}%;background:var(--bad)"></i>`:""}<i style="width:${((v.n-v.late)/top*100).toFixed(2)}%;background:var(--accent)"></i></span><span class="amt">${v.n} abiertas${v.late?` · ${v.late} venc.`:""}</span></div>`).join("") : `<div class="fin">Aún no hay colaboradores.</div>`;
   const draft = avanceOpen && $("av_"+avanceOpen) ? $("av_"+avanceOpen).value : null;
-  const list=all.filter(t=>(!va||t.responsable===va)&&(!pri||t.prioridad===pri)&&(!q||(t.titulo+" "+t.detalle).toLowerCase().includes(q)));
+  const list=all.filter(t=>esDe(t.responsable, va)&&(!pri||t.prioridad===pri)&&(!q||(t.titulo+" "+t.detalle).toLowerCase().includes(q)));
   $("tCols").innerHTML = TE.map(est=>{
     const l=list.filter(t=>t.estado===est);
     l.sort(est==="Hecha"?((a,b)=>b.completada.localeCompare(a.completada)):((a,b)=>(isLate(b)-isLate(a))||(a.vence||"9999").localeCompare(b.vence||"9999")||PR[a.prioridad]-PR[b.prioridad]));
@@ -1195,7 +1201,7 @@ function renderDeps(){
     s.innerHTML='<option value="">Todas</option>'+fechas.map(f=>`<option value="${esc(f)}">${fmtD(f)}</option>`).join(""); if(fechas.includes(cur)) s.value=cur; }
   const f=$("dFecha").value, est=$("dEst").value, q=normTxt($("dq").value), va=$("viewAs").value;
   let base=all.filter(d=>!f||d.fecha===f);
-  if(va) base=base.filter(d=>!d.lista||rows.get(d.lista)?.responsable===va);
+  if(va) base=base.filter(d=>!d.lista||esDe(rows.get(d.lista)?.responsable, va));
   const sum=a=>a.reduce((t,d)=>t+d.importe,0);
   const bp=base.filter(d=>!d.lista&&!d.noLista), bo=base.filter(d=>d.lista);
   $("dkTot").textContent=mx0.format(sum(base)); $("dkTotD").textContent=`${base.length} depósitos${f?" del "+fmtD(f):""}`;
