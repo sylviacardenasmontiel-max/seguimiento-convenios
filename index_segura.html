@@ -652,15 +652,23 @@ $("loginForm").onsubmit = async e => {
   e.preventDefault();
   const u=$("lgUser").value.trim().toLowerCase(), p=$("lgPass").value;
   if(!u||!p){ showLoginErr("Escribe tu usuario y tu contraseña."); return; }
-  const bloq=Number(store.get("lgBloqHasta")||0);
-  if(Date.now()<bloq){ showLoginErr(`Demasiados intentos. Espera ${Math.ceil((bloq-Date.now())/60000)} min y vuelve a intentar.`); return; }
+  // El bloqueo es por usuario: los intentos de un usuario no bloquean a otro.
+  const kF="lgFallos:"+u, kB="lgBloqHasta:"+u;
+  const bloq=Number(store.get(kB)||0);
+  if(Date.now()<bloq){ showLoginErr(`Demasiados intentos con el usuario "${u}". Espera ${Math.ceil((bloq-Date.now())/60000)} min y vuelve a intentar.`); return; }
   $("lgBtn").disabled=true; $("lgBtn").textContent="Entrando…";
   try{ await persistenciaLista; await signInWithEmailAndPassword(auth, (u.includes("@")?u:u+DOMINIO), p); }
   catch(err){
-    const n=Number(store.get("lgFallos")||0)+1; store.set("lgFallos",String(n));
-    if(err?.code==="auth/too-many-requests") showLoginErr("Demasiados intentos. Por seguridad la cuenta quedó en pausa unos minutos.");
-    else if(n>=5){ const min=Math.min(30, 2**(n-5)*2); store.set("lgBloqHasta",String(Date.now()+min*60000)); showLoginErr(`Usuario o contraseña incorrectos. Por seguridad espera ${min} min antes de volver a intentar.`); }
-    else showLoginErr(`Usuario o contraseña incorrectos. Te quedan ${5-n} intento${5-n===1?"":"s"}.`);
+    const code=err?.code||"";
+    const credencial=["auth/invalid-credential","auth/wrong-password","auth/user-not-found","auth/invalid-login-credentials","auth/invalid-email"].includes(code);
+    if(code==="auth/too-many-requests") showLoginErr("Google pausó unos minutos los intentos para esta cuenta por seguridad. Espera 5 minutos y vuelve a intentar.");
+    else if(code==="auth/user-disabled") showLoginErr("Este usuario está desactivado. Pide a tu supervisora que lo revise.");
+    else if(!credencial){ console.error(err); showLoginErr(`No se pudo conectar para iniciar sesión (${code||"error"}). Revisa tu internet y vuelve a intentar. Si sigue, avisa a tu supervisora con este código.`); }
+    else{
+      const n=Number(store.get(kF)||0)+1; store.set(kF,String(n));
+      if(n>=5){ const min=Math.min(15, 2**(n-5)*2); store.set(kB,String(Date.now()+min*60000)); showLoginErr(`Usuario o contraseña incorrectos. Por seguridad espera ${min} min antes de volver a intentar con "${u}".`); }
+      else showLoginErr(`Usuario o contraseña incorrectos. Te quedan ${5-n} intento${5-n===1?"":"s"}.`);
+    }
   }
   finally{ $("lgBtn").disabled=false; $("lgBtn").textContent="Entrar"; }
 };
@@ -673,7 +681,7 @@ onAuthStateChanged(auth, async u => {
   if(!u){ if(pv){ location.reload(); return; } $("appView").hidden=true; $("pwView").hidden=true; $("loginView").hidden=false; $("lgPass").value="";
     if(ss.get("cierreInact")){ ss.del("cierreInact"); $("lgErr").className="msg ok"; showLoginErr(`Por seguridad cerramos tu sesión después de ${INACTIVIDAD_MIN} minutos sin uso. Vuelve a entrar.`); }
     return; }
-  $("lgErr").className="msg err"; store.set("lgFallos","0"); store.set("lgBloqHasta","0");
+  $("lgErr").className="msg err"; { const uu=(u.email||"").split("@")[0]; store.set("lgFallos:"+uu,"0"); store.set("lgBloqHasta:"+uu,"0"); store.set("lgFallos","0"); store.set("lgBloqHasta","0"); }
   isAdmin = u.email===ADMIN_EMAIL; esJefe = isAdmin;
   let nombre = ADMIN_NOMBRE, debeCambiar = false;
   if(!isAdmin){
