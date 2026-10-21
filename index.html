@@ -1153,23 +1153,37 @@ async function saveTask(id,patch){ try{ await updateDoc(doc(fs,C_TAREAS,id), {..
 
 /* ---------- depósitos ---------- */
 const normTxt=s=>String(s??"").toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^A-Z0-9 ]/g," ").replace(/\s+/g," ").trim();
-const STOP=new Set(["DEL","LAS","LOS","ING","INGR","GOB","GOBIERNO","SECTOR","NOMINA","DEPOSITO","PAGO","SPEI","TRANSFERENCIA","REF","QNA","CDMX","ESTADO","SERVICIOS","POR","CREDITO","CREDITOS","PARA","CON"]);
-const toks=s=>new Set(normTxt(s).split(" ").filter(w=>w.length>=3&&!STOP.has(w)&&!/^\d+$/.test(w)));
+const STOP=new Set(["DEL","LAS","LOS","ING","INGR","SECTOR","NOMINA","DEPOSITO","PAGO","SPEI","TRANSFERENCIA","REF","QNA","SERVICIOS","POR","CREDITO","CREDITOS","PARA","CON"]);
+// Nombres de financieras: no sirven para saber de qué dependencia es un depósito.
+const LENDERS=new Set(["UNICREDIX","IMPULSO","LANITA","RAPIDA","INNODI","SURESTE","FINNOVAL","BLUEBULL","ACTINVER","NOMIPAY","CREDENZ","FIMUBAC","CREDITMAS"]);
+const sinon=s=>normTxt(s).replace(/\bNL\b/g,"NUEVO LEON").replace(/\bGOB\b/g,"GOBIERNO").replace(/\bEDO\b/g,"ESTADO").replace(/\bEDOMEX\b/g,"ESTADO MEXICO");
+const toks=s=>new Set(sinon(s).split(" ").filter(w=>w.length>=3&&!STOP.has(w)&&!LENDERS.has(w)&&!/^\d+$/.test(w)));
 const r2=n=>Math.round(n*100)/100;
+// Palabras de la dependencia de una lista: financiera + convenio (ej. "SALUD NUEVO LEON" + "Estatal HOM"), sin nombres de financieras.
+const tokLista=r=>toks((r.financiera||"")+" "+(r.convenio||"")+" "+(r.dependencia||""));
 function suggest(dp){
   if(dp.noLista) return null;
-  const dt=toks(dp.concepto+" "+dp.referencia); let best=null;
-  for(const r of rows.values()){
-    const p=pend(r); if(r.estatus==="Depositado"||p<=0) continue;
-    const conv=(r.convenio&&r.convenio!==r.dependencia)?r.convenio:splitDep(r.dependencia).conv;
-    let ov=0; for(const w of toks(conv)) if(dt.has(w)) ov++;   // solo el convenio: el nombre de la financiera (ej. UNICREDIX) no cuenta
-    const exacto=Math.abs(p-dp.importe)<1;
-    const sc=(exacto?10:0)+ov*3+(!exacto&&ov&&dp.importe<p?1:0);
-    if(sc>0 && (!best||sc>best.sc||(sc===best.sc&&dias(r.fecha)>dias(best.r.fecha)))) best={r,sc,exacto,ov};
+  const abiertas=[...rows.values()].filter(r=>r.estatus!=="Depositado"&&pend(r)>0);
+  const lt=new Map(), vocab=new Set();
+  for(const r of abiertas){ const t=tokLista(r); lt.set(r.id,t); t.forEach(w=>vocab.add(w)); }
+  // Palabras del depósito que sí aparecen en alguna lista (ej. SALUD, NUEVO, LEON)
+  const dk=[...toks(dp.concepto+" "+dp.referencia)].filter(w=>vocab.has(w));
+  let cands=abiertas.map(r=>{ const t=lt.get(r.id); const ov=dk.filter(w=>t.has(w)).length; return {r, ov, missed:dk.length-ov, exacto:Math.abs(pend(r)-dp.importe)<1}; });
+  if(dk.length){
+    // Primero la dependencia: solo se consideran las listas a las que les faltan menos palabras del depósito
+    // (así "SALUD NUEVO LEON" no se va a "GOBIERNO DE NUEVO LEON" y viceversa); luego decide el importe.
+    const conDep=cands.filter(c=>c.ov>0);
+    if(conDep.length){ const m=Math.min(...conDep.map(c=>c.missed)); cands=conDep.filter(c=>c.missed===m); }
+    else cands=cands.filter(c=>c.exacto);
+  } else cands=cands.filter(c=>c.exacto);
+  let best=null;
+  for(const c of cands){
+    const p=pend(c.r); const sc=(c.exacto?10:0)+c.ov*3+(!c.exacto&&c.ov&&dp.importe<p?1:0);
+    if(!best||sc>best.sc||(sc===best.sc&&dias(c.r.fecha)>dias(best.r.fecha))) best={...c,sc};
   }
   if(!best) return null;
-  best.fuerte = best.exacto && best.ov>0;
-  best.tipo = best.fuerte?"Coinciden importe y dependencia":best.exacto?"Coincide el importe":"Coincide la dependencia";
+  best.fuerte = best.exacto && best.ov>0 && best.missed===0;
+  best.tipo = best.fuerte?"Coinciden importe y dependencia":(best.exacto&&best.ov>0)?"Coincide el importe; dependencia parecida":best.exacto?"Coincide el importe":"Coincide la dependencia";
   return best;
 }
 function renderDeps(){
