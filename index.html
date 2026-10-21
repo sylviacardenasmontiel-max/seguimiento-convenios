@@ -230,6 +230,62 @@ button.chip{border:1px solid var(--line);color:var(--accent);background:var(--ac
 .login input{width:100%}
 @media (max-width:860px){.kpis.k3{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.tcols{grid-template-columns:1fr}}
 @media (max-width:420px){.facts,.form .two{grid-template-columns:1fr}.bar{grid-template-columns:90px minmax(0,1fr) auto}}
+/* ===== Ajustes de la auditoría de UX (oct-2026) ===== */
+/* Letras: mínimo 12px y peso máximo 600 */
+.eyebrow,label.inline,th,.log .meta,.log .del,.com .meta,.com .del,.ccount,.badge,.chip,.sug,.pv .entDep,.pv .entActions button,.pv .entEmpty,.pv .envRow2 label,.pv .weekDayHead{font-size:12px}
+h1,h2,h3,b,strong,tfoot td,.pv .timeInput,.pv .weekLabel,.pv .weekDayHead,.pv .envRow2 label,.pv input.envDep,.pv .envEstatus,.pv .envFecha{font-weight:600}
+/* Espaciados en cuadrícula de 4/8px */
+select,input,textarea{padding:8px 12px}
+button{padding:8px 12px}
+th,td{padding:8px 12px}
+.kpi,.panel{padding:16px}
+.dacts button,.card .acts button{padding:4px 8px}
+/* Sombras suaves */
+.toast{box-shadow:0 4px 12px rgba(0,0,0,.07)}
+/* Movimiento: solo transform/opacity, tiempos estándar y sin bucles infinitos */
+.pv .pvbar>div{transition:none}
+.live:not(.off)::before{animation:none!important}
+@media (prefers-reduced-motion:no-preference){aside.drawer{animation:slide 200ms ease-out}}
+@media (prefers-reduced-motion:reduce){aside.drawer{animation:none!important}}
+/* Filas que se abren: flechita visible */
+#tb tr[data-id] td:last-child{position:relative;padding-right:32px}
+#tb tr[data-id] td:last-child::after{content:"›";position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:20px;line-height:1}
+#tb tr[data-id]:hover td:last-child::after{color:var(--accent)}
+/* Botón cerrar con ayuda visible */
+.x{min-width:36px;min-height:36px;display:inline-grid;place-items:center;border-radius:6px;position:relative}
+.x:hover{background:var(--surface-2)}
+[data-tip]{position:relative}
+[data-tip]:hover::after,[data-tip]:focus-visible::after{content:attr(data-tip);position:absolute;top:calc(100% + 6px);right:0;white-space:nowrap;background:var(--fg);color:var(--bg);font-size:12px;font-weight:500;padding:4px 8px;border-radius:4px;z-index:40;pointer-events:none}
+/* Errores al salir del campo */
+.ferr{color:var(--bad);font-size:12px;font-weight:500;text-transform:none;letter-spacing:0}
+input[aria-invalid="true"],select[aria-invalid="true"],textarea[aria-invalid="true"]{border-color:var(--bad)}
+/* Esqueleto de carga */
+.sk{display:block;height:12px;border-radius:4px;background:var(--surface-2)}
+/* Resumen plegable */
+details.resumen{display:grid;gap:16px}
+details.resumen>summary{cursor:pointer;font-weight:600;color:var(--muted);font-size:13px;list-style:none;display:flex;align-items:center;gap:8px;padding:4px 0;min-height:32px}
+details.resumen>summary::-webkit-details-marker{display:none}
+details.resumen>summary::before{content:"▸";transition:transform 150ms ease-out}
+details.resumen[open]>summary::before{transform:rotate(90deg)}
+details.resumen[open]{display:grid;gap:16px}
+.resumen-body{display:grid;gap:16px}
+/* Menú en celular */
+#btnMenu{display:none}
+@media (max-width:860px){
+  header.top{flex-direction:column;align-items:stretch}
+  #btnMenu{display:inline-flex;align-items:center;gap:8px;align-self:flex-start}
+  .chrome{display:none!important}
+  body.menu-open .chrome{display:flex!important;flex-direction:column;align-items:stretch;gap:8px;margin-top:0!important;padding:12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+  body.menu-open .chrome>*:not([hidden]){width:100%}
+  .tabs{flex-wrap:wrap;overflow:visible}
+  .tab{padding:12px}
+}
+/* Tamaño de toque cómodo en celular / pantallas táctiles */
+@media (max-width:860px),(pointer:coarse){
+  button,select,input:not([type=checkbox]):not([type=radio]):not([type=file]),.tab{min-height:44px}
+  input[type=checkbox]{width:20px;height:20px;margin:12px}
+  .x{min-width:44px;min-height:44px}
+}
 </style>
 </head>
 <body>
@@ -265,19 +321,20 @@ button.chip{border:1px solid var(--line);color:var(--accent);background:var(--ac
       <div class="eyebrow">Cobranza · Listas de descuento</div>
       <h1>Seguimiento de Convenios</h1>
       <p class="sub" id="sub">Cargando listas…</p>
-    </div>
-    <div class="tools">
       <span class="live off" id="live">Conectando…</span>
+    </div>
+    <button class="ghost" id="btnMenu" aria-expanded="false" aria-controls="menuChrome">☰ Menú</button>
+    <div class="tools chrome" id="menuChrome">
       <label class="inline" for="viewAs" id="viewAsWrap">Estoy viendo
         <select id="viewAs"><option value="">Todo el equipo</option></select>
       </label>
-      <button id="btnTeam" class="ghost" hidden>Equipo</button>
+      <button id="btnTeam" class="ghost" hidden>Administrar equipo</button>
       <button id="btnImport" class="ghost" hidden>Importar Excel</button>
       <button id="btnExport" class="ghost" hidden>Descargar Excel</button>
       <input type="file" id="fileIn" accept=".xlsx,.xls,.csv" hidden>
     </div>
   </header>
-  <div class="tools" style="justify-content:flex-end;margin-top:-10px">
+  <div class="tools chrome" style="justify-content:flex-end;margin-top:-10px">
     <span class="me">Sesión: <b id="meName"></b></span>
     <button class="ghost" id="btnPass">Cambiar contraseña</button>
     <button class="ghost" id="btnOut">Salir</button>
@@ -296,6 +353,7 @@ button.chip{border:1px solid var(--line);color:var(--accent);background:var(--ac
   </nav>
 
   <div class="view" id="viewL">
+    <details class="resumen" id="resumenL" open><summary>Resumen del equipo</summary><div class="resumen-body">
     <section class="kpis" aria-label="Resumen">
       <div class="kpi"><span class="eyebrow">Pendiente de depósito</span><span class="v" id="kPend">—</span><span class="d" id="kPendD">&nbsp;</span></div>
       <div class="kpi"><span class="eyebrow">Sin respuesta</span><span class="v" id="kSR">—</span><span class="d" id="kSRD">&nbsp;</span></div>
@@ -306,12 +364,13 @@ button.chip{border:1px solid var(--line);color:var(--accent);background:var(--ac
       <section class="panel"><h2>Carga por colaborador <span class="eyebrow">Importe pendiente</span></h2><div class="bars" id="byWho"></div></section>
       <section class="panel"><h2>Por estatus <span class="eyebrow">Clic para filtrar</span></h2><div class="bars" id="byStatus"></div></section>
     </div>
+    </div></details>
     <section class="filters" aria-label="Filtros">
       <label class="inline grow" for="q">Buscar<input id="q" type="search" placeholder="Lista, dependencia o convenio"></label>
       <label class="inline" for="fFin">Financiera<select id="fFin"><option value="">Todas</option></select></label>
       <label class="inline" for="fSt">Estatus<select id="fSt"><option value="">Todos</option><option value="__open">Pendientes (no depositado)</option></select></label>
       <label class="inline" for="fWho">Responsable<select id="fWho"><option value="">Todos</option><option value="__none">Sin asignar</option></select></label>
-      <button id="btnClear" class="ghost">Limpiar</button>
+      <button id="btnClear" class="ghost">Limpiar filtros</button>
     </section>
     <div class="bulk" id="bulk" hidden>
       <span id="bulkN"></span>
@@ -332,7 +391,7 @@ button.chip{border:1px solid var(--line);color:var(--accent);background:var(--ac
           <th data-k="responsable">Responsable</th>
           <th class="nosort">Último seguimiento</th>
         </tr></thead>
-        <tbody id="tb"><tr><td colspan="9" class="empty">Cargando listas del equipo…</td></tr></tbody>
+        <tbody id="tb" aria-busy="true"><tr aria-hidden="true"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr><tr aria-hidden="true"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr><tr aria-hidden="true"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr><tr aria-hidden="true"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr><tr aria-hidden="true"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr></tbody>
         <tfoot id="tf"></tfoot>
       </table>
     </div>
@@ -383,7 +442,7 @@ button.chip{border:1px solid var(--line);color:var(--accent);background:var(--ac
     <div class="tablebox">
       <table>
         <thead><tr><th data-dk="fecha">Fecha</th><th data-dk="concepto">Concepto / dependencia</th><th data-dk="importe" class="r">Importe</th><th data-dk="estado">Estado</th><th data-dk="lista">Lista</th><th class="nosort"></th></tr></thead>
-        <tbody id="dTb"><tr><td colspan="6" class="empty">Cargando depósitos…</td></tr></tbody>
+        <tbody id="dTb" aria-busy="true"><tr aria-hidden="true"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr><tr aria-hidden="true"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr><tr aria-hidden="true"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr><tr aria-hidden="true"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr></tbody>
         <tfoot id="dTf"></tfoot>
       </table>
     </div>
@@ -579,7 +638,7 @@ function toast(nombre,text){ const el=document.createElement("div"); el.classNam
 function setLive(on){ const l=$("live"); l.className="live"+(on?"":" off"); l.textContent=on?"En vivo":"Sin conexión"; }
 function handleWriteErr(e){
   console.error(e);
-  if(e?.code==="permission-denied") flash("No tienes permiso para hacer ese cambio.","err");
+  if(e?.code==="permission-denied") flash("Este cambio requiere permiso de supervisión. Pídele a tu supervisora que lo haga o que revise tu acceso.","err");
   else flash("No se pudo guardar. Revisa tu conexión e intenta de nuevo.","err");
 }
 
@@ -704,7 +763,7 @@ function start(){
       const uc=x.ultimoComentario; if(uc && uc.ts && uc.porUid!==me.uid && uc.ts!==prev?.ultimoComentario?.ts) toast(uc.porNombre, `comentó en la lista ${x.lista}: ${uc.texto}`); }
     setLive(true);
     rows=new Map(s.docs.map(d=>{const x=d.data(); return [d.id,{id:d.id,lista:x.lista??Number(d.id),dependencia:String(x.dependencia||""),financiera:String(x.financiera||"Otros"),convenio:String(x.convenio||x.dependencia||""),fecha:String(x.fecha||""),importe:Number(x.importe)||0,estatusOrigen:String(x.estatusOrigen||""),estatus:ST[x.estatus]?x.estatus:normSt(x.estatus),responsable:String(x.responsable||""),responsableUid:String(x.responsableUid||""),promesa:String(x.promesa||""),depositado:Number(x.depositado)||0,ultimaNota:String(x.ultimaNota||""),actualizado:String(x.actualizado||""),comentarios:Math.max(0,Number(x.comentarios)||0),ultimoComentario:x.ultimoComentario||null,avisoBitacora:x.avisoBitacora||null}];}));
-    loaded=true; refreshSelects(); render(); repararResponsables();
+    loaded=true; $("tb").removeAttribute("aria-busy"); refreshSelects(); render(); repararResponsables();
   }, e=>{ console.error(e); setLive(false); $("tb").innerHTML='<tr><td colspan="9" class="empty">No se pudieron cargar las listas. Revisa tu conexión y recarga la página.</td></tr>'; }));
 
   const qTareas = esJefe ? query(collection(fs,C_TAREAS),limit(1000)) : query(collection(fs,C_TAREAS),where("responsableUid","==",me.uid),limit(1000));
@@ -719,7 +778,7 @@ function start(){
   const qDeps = esJefe ? query(collection(fs,C_DEPS),limit(2000)) : query(collection(fs,C_DEPS),where("responsableUid","==",me.uid),limit(2000));
   unsubs.push(onSnapshot(qDeps, s=>{
     deps=new Map(s.docs.map(d=>{ const x=d.data(); return [d.id,{id:d.id,fecha:String(x.fecha||""),importe:Number(x.importe)||0,concepto:String(x.concepto||""),referencia:String(x.referencia||""),lista:String(x.lista||""),aplicado:String(x.aplicado||""),aplicadoPor:String(x.aplicadoPor||""),estatusAntes:String(x.estatusAntes||""),archivado:!!x.archivado,responsableUid:String(x.responsableUid||""),noLista:!!x.noLista,noListaPor:String(x.noListaPor||""),noListaEl:String(x.noListaEl||""),responsable:String(x.responsable||""),asignadoPor:String(x.asignadoPor||"")}]; }));
-    depsLoaded=true; renderDeps(); renderDrawerDeps(); repararResponsables();
+    depsLoaded=true; $("dTb").removeAttribute("aria-busy"); renderDeps(); renderDrawerDeps(); repararResponsables();
   }, e=>{console.error(e);}));
 }
 
@@ -804,7 +863,7 @@ function render(){
       <td><span class="pill ${st.c}">${esc(r.estatus)}</span>${r.promesa&&r.estatus==="Promesa de pago"?`<div class="fin">para ${fmtD(r.promesa)}</div>`:""}</td>
       <td class="who ${r.responsable?"":"none"}">${esc(r.responsable||"Sin asignar")}</td>
       <td><div class="note" title="${esc(r.ultimaNota||"")}">${esc(r.ultimaNota||"—")}</div><div class="fin">${r.actualizado?new Date(r.actualizado).toLocaleDateString("es-MX",{day:"2-digit",month:"short"}):""}${r.comentarios?`<span class="ccount" title="Comentarios">${r.comentarios} coment.</span>`:""}</div></td></tr>`;}).join("")
-    : `<tr><td colspan="${cols}" class="empty">${rows.size?"Ninguna lista coincide con los filtros.":(esJefe?"Todavía no hay listas. Usa “Importar Excel” para cargar el archivo de listas.":"Todavía no hay listas cargadas.")}</td></tr>`;
+    : `<tr><td colspan="${cols}" class="empty">${rows.size?`Ninguna lista coincide con los filtros. <button class="ghost" data-clear="L">Limpiar filtros</button>`:(esJefe?"Todavía no hay listas. Usa “Importar Excel” para cargar el archivo de listas.":"Todavía no hay listas cargadas.")}</td></tr>`;
   const tot=list.reduce((s,r)=>s+(r.importe||0),0);
   $("tf").innerHTML = list.length? `<tr><td colspan="${showSel?5:4}">${list.length} listas</td><td class="r num">${mx.format(tot)}</td><td colspan="3"></td></tr>`:"";
   $("selAll").checked = list.length>0 && list.every(r=>selected.has(r.id));
@@ -815,12 +874,13 @@ function render(){
 }
 
 /* ---------- ficha de lista ---------- */
-function showDrawer(){ $("drawer").hidden=false; $("scrim").hidden=false; }
+let drawerVolver=null, drawerFilaId=null;
+function showDrawer(){ if($("drawer").hidden){ drawerVolver=document.activeElement; drawerFilaId=null; } $("drawer").hidden=false; $("scrim").hidden=false; $("drawer").setAttribute("role","dialog"); $("drawer").setAttribute("aria-modal","true"); }
 function openDrawer(id){
   openId=id; const r=rows.get(id); if(!r) return;
   showDrawer();
   const opts=[...new Set([...team, r.responsable].filter(Boolean))];
-  $("drawer").innerHTML = `<div class="dhead"><div><div class="eyebrow">Lista <span class="num">${esc(r.lista)}</span> · ${esc(r.financiera)}</div><h3>${esc(r.convenio)}</h3><div id="dPill"></div></div><button class="x" id="dClose" aria-label="Cerrar">✕</button></div>
+  $("drawer").innerHTML = `<div class="dhead"><div><div class="eyebrow">Lista <span class="num">${esc(r.lista)}</span> · ${esc(r.financiera)}</div><h3>${esc(r.convenio)}</h3><div id="dPill"></div></div><button class="x" id="dClose" aria-label="Cerrar" data-tip="Cerrar (Esc)">✕</button></div>
    <div class="dbody">
      <div class="facts" id="dFacts"></div>
      <form class="form" id="dForm">
@@ -838,7 +898,7 @@ function openDrawer(id){
        <div class="eyebrow" style="margin-bottom:8px">Comentarios</div>
        <div class="coms" id="dComs"><div class="fin">Cargando…</div></div>
        <form class="comform" id="cForm" style="margin-top:10px">
-         <textarea id="cTxt" maxlength="1000" placeholder="Escribe un comentario o una duda sobre esta lista"></textarea>
+         <textarea id="cTxt" aria-label="Escribe un comentario" maxlength="1000" placeholder="Escribe un comentario o una duda sobre esta lista"></textarea>
          <div style="display:flex;justify-content:flex-end"><button class="primary" id="cGo">Comentar</button></div>
        </form>
      </div>
@@ -864,7 +924,7 @@ function renderComments(){
   if(!comEntries.length){ el.innerHTML='<div class="fin">Sin comentarios. Úsalos para dudas, acuerdos o avisos sobre esta lista.</div>'; return; }
   const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
   el.innerHTML=comEntries.map(c=>{ const mine=c.porUid===me.uid; const puede=mine||esJefe;
-    return `<div class="com ${mine?"mine":""}"><div class="meta"><span><b>${esc(c.porNombre||"Alguien del equipo")}</b> · ${new Date(c.ts).toLocaleString("es-MX",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}</span>${puede?`<button type="button" class="del" data-cdel="${esc(c.id)}">${confirmCom===c.id?"¿Borrar? Confirmar":"Borrar"}</button>`:""}</div><div class="txt">${esc(c.texto)}</div></div>`; }).join("");
+    return `<div class="com ${mine?"mine":""}"><div class="meta"><span><b>${esc(c.porNombre||"Alguien del equipo")}</b> · ${new Date(c.ts).toLocaleString("es-MX",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}</span>${puede?`<button type="button" class="del" data-cdel="${esc(c.id)}">${confirmCom===c.id?"Sí, borrar este comentario":"Borrar"}</button>`:""}</div><div class="txt">${esc(c.texto)}</div></div>`; }).join("");
   el.querySelectorAll("[data-cdel]").forEach(b=>b.onclick=()=>deleteComment(b.dataset.cdel));
   if(atBottom) el.lastElementChild?.scrollIntoView({block:"nearest"});
 }
@@ -900,7 +960,7 @@ function renderDrawerFacts(){
 function renderLog(){
   const el=$("dLog"); if(!el) return;
   if(!logEntries.length){ el.innerHTML='<div class="e fin">Sin movimientos todavía. El primer seguimiento que guardes aparecerá aquí.</div>'; return; }
-  el.innerHTML=logEntries.map(e=>`<div class="e"><div class="meta"><span>${new Date(e.ts).toLocaleString("es-MX",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})} · ${esc(e.porNombre||"Alguien del equipo")}</span>${esJefe?`<button type="button" class="del" data-ldel="${esc(e.id)}">${confirmLog===e.id?"¿Borrar? Confirmar":"Borrar"}</button>`:""}</div>
+  el.innerHTML=logEntries.map(e=>`<div class="e"><div class="meta"><span>${new Date(e.ts).toLocaleString("es-MX",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})} · ${esc(e.porNombre||"Alguien del equipo")}</span>${esJefe?`<button type="button" class="del" data-ldel="${esc(e.id)}">${confirmLog===e.id?`Sí, borrar movimiento del ${new Date(e.ts).toLocaleDateString("es-MX",{day:"2-digit",month:"short"})}`:"Borrar"}</button>`:""}</div>
      ${e.cambios?`<div class="fin">${esc(e.cambios)}</div>`:""}${e.texto?`<div>${esc(e.texto)}</div>`:""}</div>`).join("");
   el.querySelectorAll("[data-ldel]").forEach(b=>b.onclick=()=>deleteLog(b.dataset.ldel));
 }
@@ -916,7 +976,9 @@ async function deleteLog(eid){
     flash("Movimiento borrado de la bitácora. Si cambió el estatus o el monto, corrígelo con un seguimiento nuevo.");
   }catch(e){ handleWriteErr(e); }
 }
-function closeDrawer(){ openId=null; $("drawer").hidden=true; $("scrim").hidden=true; $("drawer").innerHTML=""; if(logUnsub){logUnsub();logUnsub=null;} if(comUnsub){comUnsub();comUnsub=null;} }
+function closeDrawer(){ if(openId) drawerFilaId=openId; openId=null; $("drawer").hidden=true; $("scrim").hidden=true; $("drawer").innerHTML=""; if(logUnsub){logUnsub();logUnsub=null;} if(comUnsub){comUnsub();comUnsub=null;}
+  // regresar el foco a donde estaba (o a la misma fila de la tabla, aunque se haya redibujado)
+  setTimeout(()=>{ const fila=drawerFilaId&&document.querySelector(`tr[data-id="${CSS.escape(drawerFilaId)}"]`); const dest=fila||(drawerVolver&&document.contains(drawerVolver)?drawerVolver:null); if(dest&&dest.focus) dest.focus(); },0); }
 
 async function saveFollow(){
   const r=rows.get(openId); if(!r) return;
@@ -944,7 +1006,7 @@ let confirmQuitar=null;
 function openTeam(){
   openId=null; if(logUnsub){logUnsub();logUnsub=null;} if(comUnsub){comUnsub();comUnsub=null;}
   showDrawer();
-  $("drawer").innerHTML=`<div class="dhead"><div><div class="eyebrow">Supervisión</div><h3>Equipo de seguimiento</h3><div class="fin">Da de alta a cada colaborador con su usuario y contraseña. Para asignar varias listas a la vez, marca las casillas en la tabla.</div></div><button class="x" id="dClose" aria-label="Cerrar">✕</button></div>
+  $("drawer").innerHTML=`<div class="dhead"><div><div class="eyebrow">Supervisión</div><h3>Equipo de seguimiento</h3><div class="fin">Da de alta a cada colaborador con su usuario y contraseña. Para asignar varias listas a la vez, marca las casillas en la tabla.</div></div><button class="x" id="dClose" aria-label="Cerrar" data-tip="Cerrar (Esc)">✕</button></div>
    <div class="dbody">
      <form class="form" id="tForm">
        <div class="eyebrow">Nuevo colaborador</div>
@@ -963,6 +1025,9 @@ function openTeam(){
   $("tmNombre").oninput=()=>{ if(!$("tmUser").dataset.touched) $("tmUser").value=$("tmNombre").value.trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]/g,""); };
   $("tmUser").oninput=()=>{$("tmUser").dataset.touched="1";};
   $("tForm").onsubmit=altaColaborador;
+  validarCampo($("tmNombre"), v=>v.trim()?"":"Escribe el nombre completo.");
+  validarCampo($("tmUser"), vUsuario);
+  validarCampo($("tmPass"), v=>v?passDebil(v)||"":"Escribe una contraseña temporal.");
   renderTeam();
 }
 async function altaColaborador(e){
@@ -985,14 +1050,14 @@ async function altaColaborador(e){
     $("tmNombre").value=""; $("tmUser").value=""; $("tmPass").value=""; delete $("tmUser").dataset.touched;
   }catch(err){
     console.error(err);
-    msg(err?.code==="auth/email-already-in-use" ? "Ese usuario ya existe (puede ser de otra de tus apps). Elige otro usuario." : "No se pudo dar de alta: "+(err?.message||err),"err");
+    msg(err?.code==="auth/email-already-in-use" ? "Ese usuario ya existe (puede ser de otra de tus apps). Elige otro usuario." : (err?.code==="auth/weak-password" ? "La contraseña temporal es muy débil. Usa al menos 10 caracteres con letras y números." : err?.code==="auth/network-request-failed" ? "No hay conexión. Revisa tu internet e intenta de nuevo." : "No se pudo dar de alta. Intenta de nuevo; si sigue fallando, avísale a quien administra la plataforma."),"err");
   }finally{ if(tempApp) try{ await deleteApp(tempApp);}catch(e){} if($("tmGo")) $("tmGo").disabled=false; }
 }
 function renderTeam(){
   const el=$("tList"); if(!el) return;
   const dup=nombresDuplicados(); const avisoDup = dup.length ? `<div class="msg err">Hay nombres repetidos en el equipo (${esc([...new Set(dup)].join(", "))}). Las listas se asignan por nombre: quita el acceso del usuario que ya no se use o cámbiale el nombre para distinguirlos.</div>` : "";
   el.innerHTML = avisoDup + (equipo.length? equipo.map(t=>{const n=[...rows.values()].filter(r=>r.responsable===t.nombre&&r.estatus!=="Depositado").length; const sup=t.rol==="supervisor"; const puedeQuitar=isAdmin||!sup;
-     return `<div class="row"><span>${esc(t.nombre)} ${sup?'<span class="chip media">Supervisor</span>':""} <span class="fin">· ${esc(t.usuario)}${sup?"":` · ${n} listas abiertas`}</span></span><span class="dacts">${isAdmin?`<button class="ghost" style="padding:4px 9px;font-size:12px" data-rol="${esc(t.uid)}">${sup?"Hacer colaborador":"Hacer supervisor"}</button>`:""}${puedeQuitar?`<button class="ghost" style="padding:4px 9px;font-size:12px" data-pw="${esc(t.uid)}" title="Al entrar se le pedirá crear una contraseña nueva">${t.debeCambiarPass?"Cambio pendiente":"Pedir cambio de contraseña"}</button>`:""}${puedeQuitar?`<button class="ghost" style="padding:4px 9px;font-size:12px" data-rm="${esc(t.uid)}">${confirmQuitar===t.uid?"Confirmar":"Quitar acceso"}</button>`:""}</span></div>`}).join("")
+     return `<div class="row"><span>${esc(t.nombre)} ${sup?'<span class="chip media">Supervisor</span>':""} <span class="fin">· ${esc(t.usuario)}${sup?"":` · ${n} listas abiertas`}</span></span><span class="dacts">${isAdmin?`<button class="ghost" style="padding:4px 9px;font-size:12px" data-rol="${esc(t.uid)}">${sup?"Hacer colaborador":"Hacer supervisor"}</button>`:""}${puedeQuitar?`<button class="ghost" style="padding:4px 9px;font-size:12px" data-pw="${esc(t.uid)}" title="Al entrar se le pedirá crear una contraseña nueva">${t.debeCambiarPass?"Cambio pendiente":"Pedir cambio de contraseña"}</button>`:""}${puedeQuitar?`<button class="ghost" style="padding:4px 9px;font-size:12px" data-rm="${esc(t.uid)}">${confirmQuitar===t.uid?`Sí, quitar acceso a ${esc(t.nombre)}`:"Quitar acceso"}</button>`:""}</span></div>`}).join("")
    : '<div class="fin">Aún no hay colaboradores.</div>');
   el.querySelectorAll("[data-rol]").forEach(b=>b.onclick=async()=>{
     const t=equipo.find(e=>e.uid===b.dataset.rol); if(!t) return;
@@ -1014,7 +1079,7 @@ function renderTeam(){
 function openPass(){
   openId=null; if(logUnsub){logUnsub();logUnsub=null;} if(comUnsub){comUnsub();comUnsub=null;}
   showDrawer();
-  $("drawer").innerHTML=`<div class="dhead"><div><div class="eyebrow">Mi cuenta</div><h3>Cambiar contraseña</h3></div><button class="x" id="dClose" aria-label="Cerrar">✕</button></div>
+  $("drawer").innerHTML=`<div class="dhead"><div><div class="eyebrow">Mi cuenta</div><h3>Cambiar contraseña</h3></div><button class="x" id="dClose" aria-label="Cerrar" data-tip="Cerrar (Esc)">✕</button></div>
    <div class="dbody"><form class="form" id="pForm">
      <label>Contraseña actual<input type="password" id="pOld" autocomplete="current-password"></label>
      <label>Contraseña nueva<input type="password" id="pNew" autocomplete="new-password" minlength="10" placeholder="mínimo 10, letras y números"></label>
@@ -1023,6 +1088,9 @@ function openPass(){
      <div style="display:flex;justify-content:flex-end"><button class="primary" id="pGo">Guardar</button></div>
    </form></div>`;
   $("dClose").onclick=closeDrawer;
+  validarCampo($("pOld"), v=>v?"":"Escribe tu contraseña actual.");
+  validarCampo($("pNew"), v=>v?passDebil(v)||"":"Escribe la contraseña nueva.");
+  validarCampo($("pNew2"), v=>v&&v!==$("pNew").value?"No coincide con la contraseña nueva.":"");
   $("pForm").onsubmit=async e=>{
     e.preventDefault(); const msg=(t,k)=>{ $("pMsg").className="msg "+k; $("pMsg").textContent=t; $("pMsg").hidden=false; };
     const a=$("pOld").value, n=$("pNew").value, n2=$("pNew2").value;
@@ -1117,7 +1185,7 @@ function taskCard(t){
          : t.estado==="En proceso"?`<button data-act="estado" data-v="Hecha">Marcar hecha</button><button class="ghost" data-act="estado" data-v="Pendiente">Regresar</button>`
          : `<button class="ghost" data-act="estado" data-v="Pendiente">Reabrir</button>`;
     if(t.estado!=="Hecha") btns+=`<button class="ghost" data-act="avance">Nota de avance</button>`;
-    if(esJefe) btns+=`<button class="ghost" data-act="del">${confirmDel===t.id?"Confirmar eliminar":"Eliminar"}</button>`;
+    if(esJefe) btns+=`<button class="ghost" data-act="del">${confirmDel===t.id?`Sí, eliminar “${esc(t.titulo.length>28?t.titulo.slice(0,28)+"…":t.titulo)}”`:"Eliminar"}</button>`;
   }
   return `<div class="card" data-tid="${esc(t.id)}">
     <div class="t">${esc(t.titulo)}</div>
@@ -1233,13 +1301,13 @@ function renderDeps(){
       return `<tr data-dep="${esc(d.id)}"><td>${fmtD(d.fecha)}</td><td><div>${esc(d.concepto||"—")}</div>${d.referencia?`<div class="fin">${esc(d.referencia)}</div>`:""}</td><td class="r num">${mx.format(d.importe)}</td>
         <td><span class="pill s-ok">Aplicado</span>${d.aplicadoPor?`<div class="fin">por ${esc(d.aplicadoPor)}</div>`:""}</td>
         <td><button class="chip" data-dl="${esc(d.lista)}">Lista ${esc(d.lista)}${r?" · "+esc(r.convenio):""}</button>${r?.responsable?`<div class="fin">${esc(r.responsable)}</div>`:""}</td>
-        <td><div class="dacts">${esJefe?`<button class="ghost" data-dact="undo">${confirmDep===d.id?"Confirmar":"Desaplicar"}</button>`:""}</div></td></tr>`; }
+        <td><div class="dacts">${esJefe?`<button class="ghost" data-dact="undo">${confirmDep===d.id?`Sí, desaplicar ${mx0.format(d.importe)} de la lista ${esc(d.lista)}`:"Desaplicar"}</button>`:""}</div></td></tr>`; }
     if(d.noLista){
       return `<tr data-dep="${esc(d.id)}"><td>${fmtD(d.fecha)}</td><td><div>${esc(d.concepto||"—")}</div>${d.referencia?`<div class="fin">${esc(d.referencia)}</div>`:""}</td><td class="r num">${mx.format(d.importe)}</td>
         <td><span class="pill s-parcial">No es de lista</span>${d.noListaPor?`<div class="fin">por ${esc(d.noListaPor)}</div>`:""}</td>
         <td>${d.responsable?`<b>${esc(d.responsable)}</b>${d.asignadoPor?`<div class="fin">se lo pasó ${esc(d.asignadoPor)}</div>`:""}`:"—"}<div class="sug weak">Pago individual: no se suma a ninguna lista</div>
           ${esJefe?`<select class="dsel" data-nolwho="${esc(d.id)}" aria-label="Pasar este depósito a"><option value="">${d.responsable?"Cambiar a…":"Pasar a…"}</option>${team.map(t=>`<option ${t===d.responsable?"selected":""}>${esc(t)}</option>`).join("")}${d.responsable?'<option value="__quitar">Quitar asignación</option>':""}</select>`:""}</td>
-        <td><div class="dacts">${esJefe?`<button class="primary" data-dact="nolAsig">${d.responsable?"Cambiar":"Pasar"}</button><button class="ghost" data-dact="nolUndo">Regresar a por aplicar</button><button class="ghost" data-dact="del">${confirmDep===d.id?"Confirmar":"Borrar"}</button>`:""}</div></td></tr>`; }
+        <td><div class="dacts">${esJefe?`<button class="primary" data-dact="nolAsig">${d.responsable?"Cambiar":"Pasar"}</button><button class="ghost" data-dact="nolUndo">Regresar a por aplicar</button><button class="ghost" data-dact="del">${confirmDep===d.id?`Sí, borrar depósito de ${mx0.format(d.importe)}`:"Borrar"}</button>`:""}</div></td></tr>`; }
     const sg=suggest(d); const sel=depChoice[d.id]??(sg?sg.r.id:"");
     return `<tr data-dep="${esc(d.id)}"><td>${fmtD(d.fecha)}</td><td><div>${esc(d.concepto||"—")}</div>${d.referencia?`<div class="fin">${esc(d.referencia)}</div>`:""}</td><td class="r num">${mx.format(d.importe)}</td>
       <td><span class="pill s-sindep">Por aplicar</span></td>
@@ -1247,8 +1315,8 @@ function renderDeps(){
         ${sg?`<div class="sug ${sg.fuerte?"":"weak"}">Sugerida: lista ${esc(sg.r.lista)} · ${sg.tipo}</div>`:'<div class="sug weak">Sin sugerencia: elige la lista</div>'}
         ${d.responsable?`<div class="fin">Pasado a <b>${esc(d.responsable)}</b>${d.asignadoPor?` · ${esc(d.asignadoPor)}`:""}</div>`:""}
         ${esJefe?(()=>{ const pre=d.responsable||duenoFin(d); return `<div class="dacts" style="margin-top:6px"><select class="dsel" data-nolwho="${esc(d.id)}" aria-label="Pasar este depósito a" style="max-width:180px"><option value="">${d.responsable?"Cambiar a…":"Pasar a…"}</option>${team.map(t=>`<option ${t===pre?"selected":""}>${esc(t)}</option>`).join("")}${d.responsable?'<option value="__quitar">Quitar</option>':""}</select><button class="ghost" data-dact="nolAsig">${d.responsable?"Cambiar":"Pasar"}</button></div>${!d.responsable&&pre?`<div class="sug weak">Sugerido: pasar a ${esc(pre)} (lleva esa financiera)</div>`:""}`; })():""}</td>
-      <td><div class="dacts">${esJefe?`<button class="primary" data-dact="apply">Aplicar</button><button class="ghost" data-dact="nol" title="Pago individual u otro depósito que no corresponde a ninguna lista">No es de lista</button><button class="ghost" data-dact="del">${confirmDep===d.id?"Confirmar":"Borrar"}</button>`:""}</div></td></tr>`;
-  }).join("") : `<tr><td colspan="6" class="empty">${deps.size?"Ningún depósito coincide con los filtros.":(esJefe?"Aún no hay depósitos. Usa “Subir depósitos (Excel)” o “Agregar a mano”. Cada archivo que subas reemplaza al anterior.":"Aún no hay depósitos registrados.")}</td></tr>`;
+      <td><div class="dacts">${esJefe?`<button class="primary" data-dact="apply">Aplicar</button><button class="ghost" data-dact="nol" title="Pago individual u otro depósito que no corresponde a ninguna lista">Marcar sin lista</button><button class="ghost" data-dact="del">${confirmDep===d.id?`Sí, borrar depósito de ${mx0.format(d.importe)}`:"Borrar"}</button>`:""}</div></td></tr>`;
+  }).join("") : `<tr><td colspan="6" class="empty">${deps.size?`Ningún depósito coincide con los filtros. <button class="ghost" data-clear="D">Limpiar filtros</button>`:(esJefe?"Aún no hay depósitos. Usa “Subir depósitos (Excel)” o “Agregar a mano”. Cada archivo que subas reemplaza al anterior.":"Aún no hay depósitos registrados.")}</td></tr>`;
   $("dTf").innerHTML = list.length? `<tr><td colspan="2">${list.length} depósitos</td><td class="r num">${mx.format(sum(list))}</td><td colspan="3"></td></tr>`:"";
   $("btnDepAuto").disabled = !pendAll.some(d=>suggest(d)?.fuerte);
 }
@@ -1348,7 +1416,7 @@ async function importDeps(file){
 function openDepAdd(){
   openId=null; if(logUnsub){logUnsub();logUnsub=null;} if(comUnsub){comUnsub();comUnsub=null;}
   showDrawer();
-  $("drawer").innerHTML=`<div class="dhead"><div><div class="eyebrow">Depósitos</div><h3>Agregar depósito</h3><div class="fin">Después lo aplicas a su lista desde la tabla.</div></div><button class="x" id="dClose" aria-label="Cerrar">✕</button></div>
+  $("drawer").innerHTML=`<div class="dhead"><div><div class="eyebrow">Depósitos</div><h3>Agregar depósito</h3><div class="fin">Después lo aplicas a su lista desde la tabla.</div></div><button class="x" id="dClose" aria-label="Cerrar" data-tip="Cerrar (Esc)">✕</button></div>
    <div class="dbody"><form class="form" id="daForm">
      <div class="two"><label>Fecha<input type="date" id="daF" value="${new Date().toISOString().slice(0,10)}"></label><label>Importe<input type="number" id="daI" min="0.01" step="0.01" placeholder="0.00"></label></div>
      <label>Concepto o dependencia<input id="daC" maxlength="300" placeholder="Ej. Pago Gobierno de Sonora quincena 19"></label>
@@ -2567,7 +2635,8 @@ $("tCols").addEventListener("click", async e=>{
 $("viewAs").addEventListener("change",()=>{store.set("viewAs:"+me.uid,$("viewAs").value);selected.clear();render();});
 $("btnClear").onclick=()=>{["q","fFin","fSt","fWho"].forEach(id=>$(id).value="");render();};
 document.querySelectorAll("th[data-k]").forEach(th=>th.onclick=()=>{const k=th.dataset.k; sort = sort.k===k?{k,dir:-sort.dir}:{k,dir:(k==="importe"||k==="dias")?-1:1}; render();});
-$("tb").addEventListener("click",e=>{ const cb=e.target.closest(".rowSel"); if(cb){ cb.checked?selected.add(cb.dataset.id):selected.delete(cb.dataset.id); render(); return; } const tr=e.target.closest("tr[data-id]"); if(tr) openDrawer(tr.dataset.id); });
+$("tb").addEventListener("click",e=>{ { const celda=e.target.closest("td"); if(celda&&!e.target.closest(".rowSel")){ const c=celda.querySelector(".rowSel"); if(c){ c.click(); return; } } }   // toda la celda de la casilla sirve para marcarla
+  const cb=e.target.closest(".rowSel"); if(cb){ cb.checked?selected.add(cb.dataset.id):selected.delete(cb.dataset.id); render(); return; } const tr=e.target.closest("tr[data-id]"); if(tr) openDrawer(tr.dataset.id); });
 $("tb").addEventListener("keydown",e=>{ if(e.key==="Enter"){const tr=e.target.closest("tr[data-id]"); if(tr) openDrawer(tr.dataset.id);} });
 $("selAll").onchange=()=>{ const l=filtered(); if($("selAll").checked) l.forEach(r=>selected.add(r.id)); else l.forEach(r=>selected.delete(r.id)); render(); };
 $("bulkGo").onclick=bulkAssign; $("bulkClear").onclick=()=>{selected.clear();render();};
@@ -2576,7 +2645,43 @@ const barClick=e=>{ const b=e.target.closest(".bar"); if(!b) return;
   if(b.dataset.st){ $("fSt").value=$("fSt").value===b.dataset.st?"":b.dataset.st; }
   render(); };
 ["byWho","byStatus"].forEach(id=>{ $(id).addEventListener("click",barClick); $(id).addEventListener("keydown",e=>{if(e.key==="Enter")barClick(e);}); });
+{ const th=$("thSel"); if(th) th.addEventListener("click",e=>{ if(e.target!==$("selAll")) $("selAll").click(); }); }
 $("scrim").onclick=closeDrawer; document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("drawer").hidden) closeDrawer();});
+/* ---------- Ajustes de la auditoría de UX ---------- */
+// Retener el foco dentro de la ficha lateral mientras está abierta
+document.addEventListener("keydown",e=>{
+  if(e.key!=="Tab"||$("drawer").hidden) return;
+  const f=[...$("drawer").querySelectorAll('button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])')].filter(x=>!x.disabled&&x.offsetParent!==null);
+  if(!f.length) return; const a=f[0], z=f[f.length-1];
+  if(!$("drawer").contains(document.activeElement)){ e.preventDefault(); a.focus(); return; }
+  if(e.shiftKey&&document.activeElement===a){ e.preventDefault(); z.focus(); }
+  else if(!e.shiftKey&&document.activeElement===z){ e.preventDefault(); a.focus(); }
+});
+// Menú en celular
+$("btnMenu").onclick=()=>{ const ab=document.body.classList.toggle("menu-open"); $("btnMenu").setAttribute("aria-expanded",String(ab)); };
+document.querySelectorAll(".chrome").forEach(c=>c.addEventListener("click",e=>{ if(e.target.closest("button")){ document.body.classList.remove("menu-open"); $("btnMenu").setAttribute("aria-expanded","false"); } }));
+// "Limpiar filtros" desde el mensaje de sin resultados
+document.addEventListener("click",e=>{ const b=e.target.closest("[data-clear]"); if(!b) return;
+  if(b.dataset.clear==="L") $("btnClear").click(); else { ["dFecha","dEst","dq"].forEach(id=>{ if($(id)) $(id).value=""; }); renderDeps(); } });
+// Resumen plegable: recuerda si lo dejas abierto o cerrado (en celular empieza cerrado)
+{ const det=$("resumenL"); if(det){ let v=null; try{ v=localStorage.getItem("resumenL"); }catch(e){}
+  det.open = v!==null ? v==="1" : !matchMedia("(max-width:860px)").matches;
+  det.addEventListener("toggle",()=>{ try{ localStorage.setItem("resumenL",det.open?"1":"0"); }catch(e){} }); } }
+// Validación al salir de cada campo: el aviso aparece al salir y se quita en cuanto corriges
+function validarCampo(el, fn){
+  if(!el||el.dataset.val) return; el.dataset.val="1";
+  const lab=el.closest("label")||el.parentNode; let m=null;
+  const show=t=>{ if(!m){ m=document.createElement("div"); m.className="ferr"; m.id=(el.id||"f")+"_err"; m.setAttribute("aria-live","polite"); lab.appendChild(m); }
+    m.textContent=t; m.hidden=!t; el.setAttribute("aria-invalid",t?"true":"false"); if(t) el.setAttribute("aria-describedby",m.id); else el.removeAttribute("aria-describedby"); };
+  el.addEventListener("blur",()=>{ if(!el.dataset.tocado && !el.value) return; show(fn(el.value)||""); });   // un campo que no has tocado no marca error
+  const limpiar=()=>{ el.dataset.tocado="1"; if(m&&!m.hidden) show(""); }; el.addEventListener("input",limpiar); el.addEventListener("change",limpiar);
+  el.addEventListener("focus",()=>{ if(m&&!m.hidden) show(""); });
+}
+const vUsuario=v=>!v.trim()?"Escribe un usuario.":(/^[a-z0-9._-]{3,30}$/.test(v.trim().toLowerCase())?"":"Usa de 3 a 30 letras o números, sin espacios ni acentos.");
+validarCampo($("pwNew"), v=>v?passDebil(v)||"":"Escribe tu contraseña nueva.");
+validarCampo($("pwNew2"), v=>v&&v!==$("pwNew").value?"No coincide con la contraseña nueva.":"");
+validarCampo($("nTit"), v=>v.trim()?"":"Escribe la tarea.");
+validarCampo($("nWho"), v=>v?"":"Elige a quién asignarla.");
 $("btnTeam").onclick=openTeam; $("btnPass").onclick=openPass;
 $("btnImport").onclick=()=>$("fileIn").click();
 $("fileIn").onchange=()=>{const f=$("fileIn").files[0]; if(f) importFile(f); $("fileIn").value="";};
