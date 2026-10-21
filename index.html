@@ -1167,6 +1167,18 @@ const toks=s=>new Set(sinon(s).split(" ").filter(w=>w.length>=3&&!STOP.has(w)&&!
 const r2=n=>Math.round(n*100)/100;
 // Palabras de la dependencia de una lista: financiera + convenio (ej. "SALUD NUEVO LEON" + "Estatal HOM"), sin nombres de financieras.
 const tokLista=r=>toks((r.financiera||"")+" "+(r.convenio||"")+" "+(r.dependencia||""));
+// Si el depósito menciona una financiera (ej. UNICREDIX), devuelve quién lleva más listas abiertas de esa financiera.
+function duenoFin(dp){
+  const palabras=new Set(sinon((dp.concepto||"")+" "+(dp.referencia||"")).split(" ").filter(w=>LENDERS.has(w)));
+  if(!palabras.size) return "";
+  const cuenta={};
+  for(const r of rows.values()){
+    if(!r.responsable||pend(r)<=0) continue;
+    if(sinon(r.financiera+" "+r.dependencia).split(" ").some(w=>palabras.has(w))) cuenta[r.responsable]=(cuenta[r.responsable]||0)+1;
+  }
+  const top=Object.entries(cuenta).sort((a,b)=>b[1]-a[1])[0];
+  return top && uidDe(top[0]) ? top[0] : "";
+}
 function suggest(dp){
   if(dp.noLista) return null;
   const abiertas=[...rows.values()].filter(r=>r.estatus!=="Depositado"&&pend(r)>0);
@@ -1232,7 +1244,9 @@ function renderDeps(){
     return `<tr data-dep="${esc(d.id)}"><td>${fmtD(d.fecha)}</td><td><div>${esc(d.concepto||"—")}</div>${d.referencia?`<div class="fin">${esc(d.referencia)}</div>`:""}</td><td class="r num">${mx.format(d.importe)}</td>
       <td><span class="pill s-sindep">Por aplicar</span></td>
       <td>${esJefe?`<select class="dsel" data-dsel="${esc(d.id)}" aria-label="Lista para este depósito">${optsFor(sel)}</select>`:(sg?`Lista ${esc(sg.r.lista)} · ${esc(sg.r.convenio)}`:"—")}
-        ${sg?`<div class="sug ${sg.fuerte?"":"weak"}">Sugerida: lista ${esc(sg.r.lista)} · ${sg.tipo}</div>`:'<div class="sug weak">Sin sugerencia: elige la lista</div>'}</td>
+        ${sg?`<div class="sug ${sg.fuerte?"":"weak"}">Sugerida: lista ${esc(sg.r.lista)} · ${sg.tipo}</div>`:'<div class="sug weak">Sin sugerencia: elige la lista</div>'}
+        ${d.responsable?`<div class="fin">Pasado a <b>${esc(d.responsable)}</b>${d.asignadoPor?` · ${esc(d.asignadoPor)}`:""}</div>`:""}
+        ${esJefe?(()=>{ const pre=d.responsable||duenoFin(d); return `<div class="dacts" style="margin-top:6px"><select class="dsel" data-nolwho="${esc(d.id)}" aria-label="Pasar este depósito a" style="max-width:180px"><option value="">${d.responsable?"Cambiar a…":"Pasar a…"}</option>${team.map(t=>`<option ${t===pre?"selected":""}>${esc(t)}</option>`).join("")}${d.responsable?'<option value="__quitar">Quitar</option>':""}</select><button class="ghost" data-dact="nolAsig">${d.responsable?"Cambiar":"Pasar"}</button></div>${!d.responsable&&pre?`<div class="sug weak">Sugerido: pasar a ${esc(pre)} (lleva esa financiera)</div>`:""}`; })():""}</td>
       <td><div class="dacts">${esJefe?`<button class="primary" data-dact="apply">Aplicar</button><button class="ghost" data-dact="nol" title="Pago individual u otro depósito que no corresponde a ninguna lista">No es de lista</button><button class="ghost" data-dact="del">${confirmDep===d.id?"Confirmar":"Borrar"}</button>`:""}</div></td></tr>`;
   }).join("") : `<tr><td colspan="6" class="empty">${deps.size?"Ningún depósito coincide con los filtros.":(esJefe?"Aún no hay depósitos. Usa “Subir depósitos (Excel)” o “Agregar a mano”. Cada archivo que subas reemplaza al anterior.":"Aún no hay depósitos registrados.")}</td></tr>`;
   $("dTf").innerHTML = list.length? `<tr><td colspan="2">${list.length} depósitos</td><td class="r num">${mx.format(sum(list))}</td><td colspan="3"></td></tr>`:"";
@@ -1317,6 +1331,8 @@ async function importDeps(file){
       nuevos.push({id, d:{fecha,importe,concepto,referencia,lista:"",aplicado:"",aplicadoPor:"",estatusAntes:"",cargado:nowIso(),cargadoPor:me.nombre,archivo:file.name.slice(0,120)}});
     }
     if(!nuevos.length){ flash(dup?`Esos ${dup} depósitos ya se habían aplicado a sus listas; no se volvieron a cargar.`:"El archivo no trae depósitos con fecha e importe.","err"); return; }
+    let auto=0;
+    for(const n of nuevos){ const sg=suggest(n.d); if(sg?.fuerte) continue; const who=duenoFin(n.d); if(who){ Object.assign(n.d,{responsable:who, responsableUid:uidDe(who), asignadoPor:"automático: lleva esa financiera", asignadoEl:nowIso()}); auto++; } }
     const actuales=[...deps.values()].filter(d=>!d.archivado);
     const sinAplicar=actuales.filter(d=>!d.lista&&!d.noLista), aplicados=actuales.filter(d=>d.lista||d.noLista);
     if(sinAplicar.length && !window.confirm(`Al subir este archivo se borrarán los ${sinAplicar.length} depósitos anteriores que siguen por aplicar. Los que ya aplicaste se quedan registrados en sus listas. ¿Continuar?`)) return;
@@ -1326,7 +1342,7 @@ async function importDeps(file){
                ...nuevos.map(n=>b=>b.set(doc(fs,C_DEPS,n.id),n.d))];
     for(let i=0;i<ops.length;i+=400){ const b=writeBatch(fs); ops.slice(i,i+400).forEach(f=>f(b)); await b.commit(); }
     $("dEst").value="pend"; $("dFecha").value="";
-    flash(`Se reemplazaron los depósitos anteriores: ${nuevos.length} depósitos nuevos${dup?` (${dup} ${dup===1?"ya estaba aplicado y no se repitió":"ya estaban aplicados y no se repitieron"})`:""}. Revisa la lista sugerida de cada uno y da clic en Aplicar.`);
+    flash(`Se reemplazaron los depósitos anteriores: ${nuevos.length} depósitos nuevos${dup?` (${dup} ${dup===1?"ya estaba aplicado y no se repitió":"ya estaban aplicados y no se repitieron"})`:""}. Revisa la lista sugerida de cada uno y da clic en Aplicar.${auto?` ${auto} se pasaron solos a quien lleva su financiera (ej. Unicredix).`:""}`);
   }catch(e){ console.error(e); e?.code?handleWriteErr(e):flash("No se pudo leer el archivo de depósitos.","err"); }
 }
 function openDepAdd(){
