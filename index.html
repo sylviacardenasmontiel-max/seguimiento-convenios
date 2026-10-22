@@ -3029,6 +3029,16 @@ const PA_SALUD_REF={"ESTATAL HOM":22800,"FEDERAL 420":172915,"FORMALIZADO 1":974
 function paClasificaAgenda(com, monto){
   let r=null; try{ r=PA_CL.classify(com, monto, PA_SALUD_REF); }catch(e){ r=null; }
   if(!r||!r.dep||!r.conv) return null;
+  // Unicredix: "LOTE ... + UNICREDIX - GOBIERNO CDMX ..." va al convenio que menciona; si no menciona ninguno
+  // (domiciliación, siguientes cuotas, liquidaciones, "UNICREDIX" solo) no es un convenio y no entra al pronóstico.
+  const bolsa=c=>/^LOTES \/ DOMICILIACION|SIN CONVENIO EN REFERENCIA/.test(c);
+  if(r.dep==="Unicredix" && bolsa(r.conv)){
+    let nuevo=null;
+    for(const seg of String(com).toUpperCase().split(/\+|\/\//)){ let rr=null; try{ rr=PA_CL.classify(seg.trim(), monto, PA_SALUD_REF); }catch(e){}
+      if(rr && rr.dep==="Unicredix" && !bolsa(rr.conv)){ nuevo=rr.conv; break; } }
+    if(!nuevo) return null;
+    r={...r, conv:nuevo};
+  }
   const mismo=t=>t.dep===r.dep&&t.conv===r.conv;
   return {g:r.dep, c:r.conv, qs:r.tags.filter(mismo).map(t=>t.q), otros:r.tags.filter(t=>!mismo(t)&&t.dep&&t.conv)};
 }
