@@ -2812,7 +2812,7 @@ function paScore(a,b){ if(!a.size||!b.size) return 0; let i=0; for(const w of a)
   return 0.7*i/Math.min(a.size,b.size)+0.3*i/(a.size+b.size-i); }
 function paNorm(s){ return String(s??"").normalize("NFD").replace(/[̀-ͯ]/g,"").toUpperCase().replace(/\s+/g," ").trim(); }
 function paLimpiaConv(s){
-  s=s.replace(/\*\*DEV ING.*/,""); s=s.replace(/\bCR\s*\d+/g,"");
+  s=s.replace(/\*\*\s*DEV ING.*/,""); s=s.replace(/\bCR\s*\d+/g,""); s=s.replace(/\b(Q|AL)\s*\d{1,2}\s*[A-Z]{2,4}\s*\d{2,4}\b.*$/,"");
   s=s.replace(/\((ING|INGR)\)/g,"");
   s=s.replace(/\b(AL|Q|QNA|CAT|DEP\.?)\s*\d{1,2}\s*-?\s*[A-Z]{3,5}\s*-?\s*\d{2,4}\b/g,"");
   s=s.replace(/\bC(L)?\s*-\s*\d+/g,""); s=s.replace(/\b\d{1,2}[A-Z]{3}\d{2}\b|\bAT \d{1,2}[A-Z]{3}\d{2}\b|\(\d DE \d\)?/g,"");
@@ -3025,10 +3025,16 @@ function classify(c,monto,saludRef){
 return {classify,base,NAMES};
 })();
 const PA_CATALOGO=new Set(["SEP|SEP 33 ADMINISTRADORA FEDERAL SERVICIOS EDUC DF", "SEP|SEP 34 SUBDIRECCION EDUCACION MEDIA SUPERIOR", "SEP|SEP 38 SECTOR CENTRAL", "Gobierno CDMX (directo)|FISCALIA GENERAL", "Gobierno CDMX (directo)|GDF CENTRAL", "Gobierno CDMX (directo)|SALUD AMI", "Gobierno CDMX (directo)|SALUD PPS", "Gobierno de Nuevo León|GOBIERNO NUEVO LEON", "Unicredix|BOMBEROS CDMX", "Unicredix|FISCALIA GENERAL CDMX", "Unicredix|GOBIERNO CDMX CENTRAL + SEDESA (UA 24)", "Unicredix|INST. DE LA JUVENTUD", "Unicredix|SNTE 21", "CONAGUA|CONAGUA", "Impulsa tu Nómina|GOBIERNO DE OAXACA (CENTRAL + DESCENTRALIZADO)", "Impulsa tu Nómina|GOBIERNO DEL ESTADO DE HIDALGO", "Impulsa tu Nómina|IEBO", "Impulsa tu Nómina|IMSS BIENESTAR", "Impulsa tu Nómina|OFICINA DE PENSIONES OAXACA (MENSUAL)", "Impulsa tu Nómina|SERVICIOS DE SALUD PUEBLA", "Impulsa tu Nómina|SERVICIOS DE SALUD TLAXCALA", "INNODI|SEC DE EDUCACION PUEBLA SNTE 23", "INNODI|SEC EDU TABASCO ESTATAL - EJECUTIVA", "INNODI|SEC EDU TABASCO FEDERAL", "Broxel - Gob. Edo. de México|GOBIERNO DEL ESTADO DE MEXICO", "Por tu Nómina|GOBIERNO DE BAJA CALIFORNIA (QUINC/CATORC)", "Por tu Nómina|GOBIERNO DE BAJA CALIFORNIA MAGISTERIO", "Por tu Nómina|GOBIERNO DE SINALOA", "Por tu Nómina|SEDESA PUEBLA", "Por tu Nómina|SEDESA TLAXCALA", "Salud Nuevo León|ESTATAL HOM", "Salud Nuevo León|FEDERAL 420", "Salud Nuevo León|FORMALIZADO 1", "Salud Nuevo León|FORMALIZADO 2", "Salud Nuevo León|FORMALIZADO 3", "Salud Nuevo León|REGULARIZADO", "Instituto Registral y Catastral NL|INSTITUTO REGISTRAL Y CATASTRAL NL", "IMSS Bienestar|IMSS BIENESTAR"]);
+const PA_GRUPOS_EXTRA=new Set(["Tu Lanita Rápida"]);
 const PA_SALUD_REF={"ESTATAL HOM":22800,"FEDERAL 420":172915,"FORMALIZADO 1":97449,"FORMALIZADO 2":6739,"FORMALIZADO 3":1138,"REGULARIZADO":48115};
 function paClasificaAgenda(com, monto){
   let r=null; try{ r=PA_CL.classify(com, monto, PA_SALUD_REF); }catch(e){ r=null; }
-  if(!r||!r.dep||!r.conv) return null;
+  if(!r||!r.dep||!r.conv){
+    // grupos que trabajamos y que no estaban en la Agenda (ej. Tu Lanita Rápida): se reconocen con el clasificador general
+    const rp=paClasifica(com);
+    if(rp && PA_GRUPOS_EXTRA.has(rp[0]) && rp[1] && rp[1]!==PA_OTROS) return {g:rp[0], c:rp[1], qs:paTags(rp[2]||""), otros:[]};
+    return null;
+  }
   // Unicredix: "LOTE ... + UNICREDIX - GOBIERNO CDMX ..." va al convenio que menciona; si no menciona ninguno
   // (domiciliación, siguientes cuotas, liquidaciones, "UNICREDIX" solo) no es un convenio y no entra al pronóstico.
   const bolsa=c=>/^LOTES \/ DOMICILIACION|SIN CONVENIO EN REFERENCIA/.test(c);
@@ -3079,7 +3085,7 @@ function paCalcular(movs, opts={}){
   if(opts.catalogo){ conv=new Map();
     for(const o of raw.values()){ const k=o.g+"|"+o.c; let ytd=0; for(let m=1;m<=M;m++) ytd+=o.mes.get(mk(Y,m))||0;
       // los convenios de la Agenda siempre; uno nuevo entra si ya cobró más de $200 mil en el año
-      if(PA_CATALOGO.has(k) || (ytd>=200000 && o.ult>=mk(...(d=>[d.getFullYear(),d.getMonth()+1])(new Date(Y,M-1-3,1))))) conv.set(k,{...o, ig:o.g, deLista:true}); } }
+      if(PA_CATALOGO.has(k) || PA_GRUPOS_EXTRA.has(o.g) || (ytd>=200000 && o.ult>=mk(...(d=>[d.getFullYear(),d.getMonth()+1])(new Date(Y,M-1-3,1))))) conv.set(k,{...o, ig:o.g, deLista:true}); } }
   else {
   // 2. Cada convenio del banco se liga al convenio de tus listas que más se le parece (misma financiera,
   //    o convenio "directo" sin financiera). Las variantes del mismo convenio se suman en un solo renglón.
