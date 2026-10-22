@@ -2731,20 +2731,33 @@ function startPron(){
   if(esJefe) unsubs.push(onSnapshot(doc(fs,C_PMETA,"actual"), s=>{ pronMeta=s.exists()?s.data():null; renderPron(); }, e=>console.error(e)));
 }
 // --- empate lista ↔ convenio del pronóstico ---
+// Palabras de cada lista y de cada convenio del pronóstico: se calculan una vez y se guardan.
+const _tkR=new WeakMap(), _tkP=new WeakMap();
+const tokR=r=>{ let t=_tkR.get(r); if(!t){ t=toks((r.convenio||"")+" "+(r.dependencia||"")); _tkR.set(r,t); } return t; };
+const tokP=p=>{ let t=_tkP.get(p); if(!t){ t=toks((p.convenio||"")+" "+(p.grupo||"")); _tkP.set(p,t); } return t; };
 function pronScore(r,p){
-  const a=toks((r.convenio||"")+" "+(r.dependencia||"")), b=toks((p.convenio||"")+" "+(p.grupo||""));
+  const a=tokR(r), b=tokP(p);
   if(!a.size||!b.size) return 0; let inter=0; for(const w of a) if(b.has(w)) inter++;
   if(!inter) return 0; return 0.7*inter/Math.min(a.size,b.size) + 0.3*inter/(a.size+b.size-inter);
 }
 function pronCands(r,n=6){ return [...pron.values()].map(p=>({p,s:pronScore(r,p)})).filter(x=>x.s>0).sort((x,y)=>y.s-x.s||(y.p.t27||0)-(x.p.t27||0)).slice(0,n); }
-function pronFor(r){
+function pronForCalc(r){
   if(!r) return null;
   if(r.pronId==="__none") return null;
   if(r.pronId && pron.has(r.pronId)) return {p:pron.get(r.pronId), manual:true};
   { const ex=pron.get(pid(r.financiera,r.convenio)); if(ex && ex.deLista) return {p:ex, auto:true}; }
   const c=pronCands(r,1)[0]; return (c && c.s>=0.6) ? {p:c.p, auto:true} : null;
 }
-function listasDe(pid){ return [...rows.values()].filter(r=>pronFor(r)?.p.id===pid); }
+// Índice lista → convenio y convenio → listas. Se rehace solo cuando cambian las listas o el pronóstico.
+let _pIdx=null;
+function pronIndice(){
+  if(_pIdx && _pIdx.p===pron && _pIdx.r===rows) return _pIdx;
+  const porLista=new Map(), porConv=new Map();
+  for(const r of rows.values()){ const m=pronForCalc(r); porLista.set(r.id,m); if(m){ let a=porConv.get(m.p.id); if(!a){ a=[]; porConv.set(m.p.id,a); } a.push(r); } }
+  _pIdx={p:pron, r:rows, porLista, porConv}; return _pIdx;
+}
+function pronFor(r){ if(!r) return null; const ix=pronIndice(); return (rows.get(r.id)===r && ix.porLista.has(r.id)) ? ix.porLista.get(r.id) : pronForCalc(r); }
+function listasDe(pid){ return pronIndice().porConv.get(pid)||[]; }
 // --- (supervisión) mantener al día quién ve cada convenio ---
 let pronSyncT=null, pronSyncing=false;
 function schedPronSync(){ if(!esJefe) return; clearTimeout(pronSyncT); pronSyncT=setTimeout(syncPronUids,1800); }
@@ -3003,6 +3016,7 @@ function paCalcular(movs, opts={}){
   const limiteInactivo=mk(...(d=>[d.getFullYear(),d.getMonth()+1])(new Date(Y,M-1-3,1)));
   const docs=new Map(); const lResto0=PA_MESES[M-1]+"–Dic "+Y;
   for(const o of conv.values()){
+    if(opts.soloListas && !o.deLista) continue; // por ahora: solo los convenios de las listas que manejan
     const idx=IDX[o.ig]||Array(12).fill(1);
     const sinDep = !o.ult;
     const inactivo = o.ult<limiteInactivo;
@@ -3083,7 +3097,8 @@ async function actualizarPronBanco(file){
     const anios=new Set(movs.map(x=>x.f.getFullYear()));
     const sel=$("pEsc"); const factor=+sel.value||1, escenario=sel.options[sel.selectedIndex].text.replace(/ \(.*\)$/,"");
     const listas=[...rows.values()].map(r=>({financiera:r.financiera, convenio:r.convenio, dependencia:r.dependencia}));
-    const R=paCalcular(movs,{factor,escenario,listas});
+    if(!listas.length){ flash("No hay listas cargadas todavía: el pronóstico se arma con los convenios de tus listas.","err"); return; }
+    const R=paCalcular(movs,{factor,escenario,listas,soloListas:true});
     const Y=+String(R.meta.corte).slice(-4);
     const faltan=[Y-3,Y-2,Y-1].filter(y=>!anios.has(y));
     const meta={...R.meta, archivo:file.name.slice(0,120), cargado:nowIso(), cargadoPor:me.nombre, indices:Object.fromEntries(Object.entries(R.idx).map(([g,v])=>[g.replace(/[.\/]/g," "),v]))};
