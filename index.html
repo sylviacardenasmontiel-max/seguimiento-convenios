@@ -48,6 +48,27 @@ button:disabled{opacity:.5;cursor:not-allowed}
 .kpi{background:var(--surface);padding:14px 16px;display:grid;gap:4px}
 .kpi .v{font-family:var(--f-num);font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
 .kpi .d{font-size:12px;color:var(--muted)}
+.pmeta{display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center;margin:8px 0}
+table.ptbl{min-width:760px}
+#pTb tr,#pRes tr{cursor:pointer}
+#pTb tr:hover,#pRes tr:hover{background:var(--surface-2)}
+td.neg{color:var(--bad)}
+label.chk{flex-direction:row!important;align-items:center;gap:6px}
+.pbars{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:3px;align-items:end;height:130px}
+.pb{display:flex;flex-direction:column;justify-content:flex-end;height:100%;min-width:0;text-align:center}
+.pb .pbv{background:var(--accent);opacity:.55;border-radius:3px 3px 0 0}
+.pb.now .pbv{opacity:1}
+.pb span{font-size:12px;color:var(--muted);line-height:1.1;margin-top:3px;white-space:nowrap}
+.ptab{display:grid;gap:4px}
+.ptab div{display:flex;gap:10px;justify-content:space-between;align-items:baseline;font-size:13px;border-bottom:1px solid var(--line);padding:3px 0}
+.ptab small{color:var(--muted);font-size:12px;margin-left:auto}
+.pcard{border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;display:grid;gap:6px;background:var(--surface-2)}
+.pfx{display:flex;flex-wrap:wrap;gap:12px;font-size:13px}
+.kpi[data-kf]{cursor:pointer;transition:background .15s}
+.kpi[data-kf]:hover{background:var(--surface-2)}
+.kpi[data-kf]:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.kpi.on{box-shadow:inset 0 -3px 0 var(--accent);background:var(--surface-2)}
+.kpi.on .d::after{content:" · filtrando ✕";color:var(--accent);font-weight:600}
 .grid2{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:18px}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;display:grid;gap:10px;align-content:start;min-width:0}
 .panel h2{font-size:14px;margin:0;display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap}
@@ -351,6 +372,7 @@ details.resumen[open]{display:grid;gap:16px}
     <button class="tab" role="tab" id="tabL" aria-selected="true">Listas de descuento</button>
     <button class="tab" role="tab" id="tabD" aria-selected="false">Depósitos<span class="badge" id="dBadge" hidden></span></button>
     <button class="tab" role="tab" id="tabT" aria-selected="false">Tareas<span class="badge" id="tBadge" hidden></span></button>
+    <button class="tab" role="tab" id="tabP" aria-selected="false">Pronóstico</button>
     <button class="tab" role="tab" id="tabH" aria-selected="false" hidden>Hoy</button>
     <button class="tab" role="tab" id="tabE" aria-selected="false" hidden>Envío de listas</button>
     <button class="tab" role="tab" id="tabN" aria-selected="false" hidden>Entregas</button>
@@ -360,10 +382,10 @@ details.resumen[open]{display:grid;gap:16px}
   <div class="view" id="viewL">
     <details class="resumen" id="resumenL" open><summary>Resumen del equipo</summary><div class="resumen-body">
     <section class="kpis" aria-label="Resumen">
-      <div class="kpi"><span class="eyebrow">Pendiente de depósito</span><span class="v" id="kPend">—</span><span class="d" id="kPendD">&nbsp;</span></div>
-      <div class="kpi"><span class="eyebrow">Sin respuesta</span><span class="v" id="kSR">—</span><span class="d" id="kSRD">&nbsp;</span></div>
-      <div class="kpi"><span class="eyebrow">Más de 30 días</span><span class="v" id="kOld">—</span><span class="d" id="kOldD">&nbsp;</span></div>
-      <div class="kpi"><span class="eyebrow">Depositado / conciliado</span><span class="v" id="kOk">—</span><span class="d" id="kOkD">&nbsp;</span></div>
+      <div class="kpi" data-kf="pend" role="button" tabindex="0" title="Ver estas listas"><span class="eyebrow">Pendiente de depósito</span><span class="v" id="kPend">—</span><span class="d" id="kPendD">&nbsp;</span></div>
+      <div class="kpi" data-kf="sr" role="button" tabindex="0" title="Ver estas listas"><span class="eyebrow">Sin respuesta</span><span class="v" id="kSR">—</span><span class="d" id="kSRD">&nbsp;</span></div>
+      <div class="kpi" data-kf="old" role="button" tabindex="0" title="Ver estas listas"><span class="eyebrow">Más de 30 días</span><span class="v" id="kOld">—</span><span class="d" id="kOldD">&nbsp;</span></div>
+      <div class="kpi" data-kf="ok" role="button" tabindex="0" title="Ver estas listas"><span class="eyebrow">Depositado / conciliado</span><span class="v" id="kOk">—</span><span class="d" id="kOkD">&nbsp;</span></div>
     </section>
     <div class="grid2">
       <section class="panel"><h2>Carga por colaborador <span class="eyebrow">Importe pendiente</span></h2><div class="bars" id="byWho"></div></section>
@@ -425,6 +447,26 @@ details.resumen[open]{display:grid;gap:16px}
       <label class="inline" for="tPri">Prioridad<select id="tPri"><option value="">Todas</option><option>Alta</option><option>Media</option><option>Baja</option></select></label>
     </section>
     <div class="tcols" id="tCols"><div class="fin">Cargando tareas…</div></div>
+  </div>
+
+  <div class="view" id="viewP" hidden>
+    <div id="pJefe" hidden>
+      <section class="kpis k3" aria-label="Resumen del pronóstico">
+        <div class="kpi"><span class="eyebrow">Cierre estimado 2026</span><span class="v" id="pk1">—</span><span class="d">Real + pronóstico Oct–Dic</span></div>
+        <div class="kpi"><span class="eyebrow">Pronóstico Oct–Dic 2026</span><span class="v" id="pk2">—</span><span class="d">Lo que falta por cobrar este año</span></div>
+        <div class="kpi"><span class="eyebrow">Pronóstico 2027</span><span class="v" id="pk3">—</span><span class="d">Todas las carteras</span></div>
+      </section>
+      <div class="pmeta"><span class="fin" id="pMeta"></span><span><button class="ghost" id="btnPron">Cargar pronóstico (Excel)</button><input type="file" id="pFile" accept=".xlsx,.xls" hidden></span></div>
+      <details class="resumen" open><summary>Resumen por grupo</summary>
+        <div class="tablebox"><table class="ptbl"><thead><tr><th class="nosort">Grupo / canal</th><th class="nosort r">Real 2025</th><th class="nosort r">Cierre est. 2026</th><th class="nosort r">Pronóstico 2027</th><th class="nosort r">Var. 2027</th></tr></thead><tbody id="pRes"></tbody></table></div>
+      </details>
+    </div>
+    <section class="filters" aria-label="Filtros del pronóstico">
+      <label class="inline grow" for="pq">Buscar<input id="pq" type="search" placeholder="Convenio o grupo"></label>
+      <label class="inline" for="pGrupo">Grupo<select id="pGrupo"><option value="">Todos</option></select></label>
+      <label class="inline chk" for="pSolo"><span>Solo con listas</span><input type="checkbox" id="pSolo"></label>
+    </section>
+    <div class="tablebox"><table class="ptbl"><thead><tr><th class="nosort">Grupo</th><th class="nosort">Convenio</th><th class="nosort r">Base mensual</th><th class="nosort r" id="pMesH">Mes</th><th class="nosort r">Oct–Dic 2026</th><th class="nosort r">Total 2027</th><th class="nosort r">Listas</th></tr></thead><tbody id="pTb"></tbody></table></div>
   </div>
 
   <div class="view" id="viewD" hidden>
@@ -731,6 +773,7 @@ function entrar(){
 // Como ahora cada colaborador solo ve lo que trae su UID, una jefa lo completa automáticamente.
 let reparado = false;   // true mientras corre una reparación
 async function repararResponsables(){
+  schedPronSync();
   if(!esJefe || reparado || !loaded || !equipoLoaded || !tasksLoaded || !depsLoaded) return;
   reparado = true;
   const pend=[];
@@ -758,10 +801,11 @@ function teardown(){
   unsubs.forEach(f=>{try{f()}catch(e){}}); unsubs=[];
   if(logUnsub){logUnsub();logUnsub=null;} if(comUnsub){comUnsub();comUnsub=null;}
   rows=new Map(); tasks=new Map(); deps=new Map(); depsLoaded=false; equipo=[]; team=[]; loaded=false; equipoLoaded=false; tasksLoaded=false; selected.clear();
-  closeDrawer(); refreshSelects.done=false; reparado=false;
+  closeDrawer(); refreshSelects.done=false; reparado=false; pron=new Map(); pronMeta=null; pronLoaded=false; pronOpen=null;
 }
 
 function start(){
+  startPron();
   unsubs.push(onSnapshot(collection(fs,C_EQUIPO), s=>{
     equipo = s.docs.map(d=>({uid:d.id, nombre:String(d.data().nombre||""), usuario:String(d.data().usuario||""), rol:d.data().rol==="supervisor"?"supervisor":"colaborador", debeCambiarPass:d.data().debeCambiarPass===true})).filter(e=>e.nombre).sort((a,b)=>a.nombre.localeCompare(b.nombre,"es"));
     team = equipo.filter(e=>e.rol!=="supervisor").map(e=>e.nombre); equipoLoaded=true;
@@ -775,7 +819,7 @@ function start(){
       const ab=x.avisoBitacora; if(ab && ab.ts && ab.porUid!==me.uid && ab.ts!==prev?.avisoBitacora?.ts) toast(ab.porNombre, ab.texto);
       const uc=x.ultimoComentario; if(uc && uc.ts && uc.porUid!==me.uid && uc.ts!==prev?.ultimoComentario?.ts) toast(uc.porNombre, `comentó en la lista ${x.lista}: ${uc.texto}`); }
     setLive(true);
-    rows=new Map(s.docs.map(d=>{const x=d.data(); return [d.id,{id:d.id,lista:x.lista??Number(d.id),dependencia:String(x.dependencia||""),financiera:String(x.financiera||"Otros"),convenio:String(x.convenio||x.dependencia||""),fecha:String(x.fecha||""),importe:Number(x.importe)||0,estatusOrigen:String(x.estatusOrigen||""),estatus:ST[x.estatus]?x.estatus:normSt(x.estatus),responsable:String(x.responsable||""),responsableUid:String(x.responsableUid||""),promesa:String(x.promesa||""),depositado:Number(x.depositado)||0,ultimaNota:String(x.ultimaNota||""),actualizado:String(x.actualizado||""),comentarios:Math.max(0,Number(x.comentarios)||0),ultimoComentario:x.ultimoComentario||null,avisoBitacora:x.avisoBitacora||null}];}));
+    rows=new Map(s.docs.map(d=>{const x=d.data(); return [d.id,{id:d.id,pronId:String(d.data().pronId||""),lista:x.lista??Number(d.id),dependencia:String(x.dependencia||""),financiera:String(x.financiera||"Otros"),convenio:String(x.convenio||x.dependencia||""),fecha:String(x.fecha||""),importe:Number(x.importe)||0,estatusOrigen:String(x.estatusOrigen||""),estatus:ST[x.estatus]?x.estatus:normSt(x.estatus),responsable:String(x.responsable||""),responsableUid:String(x.responsableUid||""),promesa:String(x.promesa||""),depositado:Number(x.depositado)||0,ultimaNota:String(x.ultimaNota||""),actualizado:String(x.actualizado||""),comentarios:Math.max(0,Number(x.comentarios)||0),ultimoComentario:x.ultimoComentario||null,avisoBitacora:x.avisoBitacora||null}];}));
     loaded=true; $("tb").removeAttribute("aria-busy"); refreshSelects(); render(); repararResponsables();
   }, e=>{ console.error(e); setLive(false); $("tb").innerHTML='<tr><td colspan="9" class="empty">No se pudieron cargar las listas. Revisa tu conexión y recarga la página.</td></tr>'; }));
 
@@ -796,10 +840,26 @@ function start(){
 }
 
 /* ---------- listas ---------- */
+// Filtro al picar un recuadro de resumen (Pendiente, Sin respuesta, Más de 30 días, Depositado)
+let kpiF="";
+function setKpiF(k){
+  kpiF = (kpiF===k) ? "" : k;
+  document.querySelectorAll(".kpi[data-kf]").forEach(el=>{ el.classList.toggle("on", el.dataset.kf===kpiF); el.setAttribute("aria-pressed", String(el.dataset.kf===kpiF)); });
+  selected.clear(); render();
+  if(kpiF){ const tb=document.querySelector("#viewL .tablebox")||document.querySelector(".tablebox"); if(tb) tb.scrollIntoView({behavior:"smooth",block:"start"}); }
+}
+document.querySelectorAll(".kpi[data-kf]").forEach(el=>{
+  el.addEventListener("click",()=>setKpiF(el.dataset.kf));
+  el.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); setKpiF(el.dataset.kf); } });
+});
 function filtered(){
   const q=$("q").value.trim().toLowerCase(), fin=$("fFin").value, st=$("fSt").value, who=$("fWho").value, va=$("viewAs").value;
   return [...rows.values()].filter(r=>{
     if(!esDe(r.responsable, va)) return false;
+    if(kpiF==="pend" && r.estatus==="Depositado") return false;
+    if(kpiF==="sr" && r.estatus!=="Sin Respuesta") return false;
+    if(kpiF==="old" && (r.estatus==="Depositado" || dias(r.fecha)<=30)) return false;
+    if(kpiF==="ok" && r.estatus!=="Depositado") return false;
     if(fin && r.financiera!==fin) return false;
     if(st==="__open" && r.estatus==="Depositado") return false;
     if(st && st!=="__open" && r.estatus!==st) return false;
@@ -915,11 +975,12 @@ function openDrawer(id){
          <div style="display:flex;justify-content:flex-end"><button class="primary" id="cGo">Comentar</button></div>
        </form>
      </div>
+     <div id="dPron"></div>
      <div id="dDeps"></div>
      <div id="dTasks"></div>
      <div><div class="eyebrow" style="margin-bottom:8px">Bitácora</div><div class="log" id="dLog"><div class="e fin">Cargando…</div></div></div>
    </div>`;
-  renderDrawerFacts(); renderDrawerTasks(); renderDrawerDeps();
+  renderDrawerFacts(); renderDrawerTasks(); renderDrawerDeps(); renderDrawerPron();
   $("dClose").onclick=$("dCancel").onclick=closeDrawer;
   $("dForm").onsubmit=e=>{e.preventDefault(); saveFollow();};
   if(logUnsub) logUnsub();
@@ -989,7 +1050,7 @@ async function deleteLog(eid){
     flash("Movimiento borrado de la bitácora. Si cambió el estatus o el monto, corrígelo con un seguimiento nuevo.");
   }catch(e){ handleWriteErr(e); }
 }
-function closeDrawer(){ if(openId) drawerFilaId=openId; openId=null; $("drawer").hidden=true; $("scrim").hidden=true; $("drawer").innerHTML=""; if(logUnsub){logUnsub();logUnsub=null;} if(comUnsub){comUnsub();comUnsub=null;}
+function closeDrawer(){ pronOpen=null; if(openId) drawerFilaId=openId; openId=null; $("drawer").hidden=true; $("scrim").hidden=true; $("drawer").innerHTML=""; if(logUnsub){logUnsub();logUnsub=null;} if(comUnsub){comUnsub();comUnsub=null;}
   // regresar el foco a donde estaba (o a la misma fila de la tabla, aunque se haya redibujado)
   setTimeout(()=>{ const fila=drawerFilaId&&document.querySelector(`tr[data-id="${CSS.escape(drawerFilaId)}"]`); const dest=fila||(drawerVolver&&document.contains(drawerVolver)?drawerVolver:null); if(dest&&dest.focus) dest.focus(); },0); }
 
@@ -1185,8 +1246,8 @@ const isLate=t=>t.estado!=="Hecha"&&!!t.vence&&parseD(t.vence)<today;
 function setTab(t){
   if(["H","E","N"].includes(t) && !pv) t="L";
   store.set("tab",t);
-  [["L","tabL","viewL"],["D","tabD","viewD"],["T","tabT","viewT"],["H","tabH","viewH"],["E","tabE","viewE"],["N","tabN","viewN"]].forEach(([k,b,v])=>{ $(b).setAttribute("aria-selected",String(t===k)); $(v).hidden=t!==k; });
-  renderTasks(); renderDeps();
+  [["L","tabL","viewL"],["D","tabD","viewD"],["T","tabT","viewT"],["P","tabP","viewP"],["H","tabH","viewH"],["E","tabE","viewE"],["N","tabN","viewN"]].forEach(([k,b,v])=>{ $(b).setAttribute("aria-selected",String(t===k)); $(v).hidden=t!==k; });
+  renderTasks(); renderDeps(); if(t==="P") renderPron();
   if(pv){ if(t==="H") pv.renderHoy(); if(t==="E") pv.renderEnvios(); if(t==="N") pv.renderEntregas(); }
 }
 function taskCard(t){
@@ -2621,8 +2682,178 @@ document.getElementById('entTxt').addEventListener('keydown', e=>{ if(e.key==='E
   const t=store.get("tab"); if(["H","E","N"].includes(t)) setTab(t);
 }
 
+/* ===================== PRONÓSTICO DE PAGO ===================== */
+// Datos: pron_meta/actual (resumen, solo supervisión) y pron_conv/{id} (un documento por convenio).
+// Cada convenio guarda "uids": los colaboradores que tienen listas de ese convenio (así cada quien ve solo lo suyo).
+const C_PMETA="pron_meta", C_PCONV="pron_conv";
+const MESES=["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+const isoDia=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+const mesLab=d=>MESES[d.getMonth()]+"-"+String(d.getFullYear()).slice(2);
+let pron=new Map(), pronMeta=null, pronLoaded=false, pronOpen=null;
+function startPron(){
+  const q = esJefe ? collection(fs,C_PCONV) : query(collection(fs,C_PCONV), where("uids","array-contains",me.uid));
+  unsubs.push(onSnapshot(q, s=>{ pron=new Map(s.docs.map(d=>[d.id,{id:d.id,...d.data()}])); pronLoaded=true; renderPron(); renderDrawerPron(); if(pronOpen&&$("drawer")&&!$("drawer").hidden&&!openId) openPron(pronOpen); schedPronSync(); }, e=>{ console.error(e); pronLoaded=true; renderPron(); }));
+  if(esJefe) unsubs.push(onSnapshot(doc(fs,C_PMETA,"actual"), s=>{ pronMeta=s.exists()?s.data():null; renderPron(); }, e=>console.error(e)));
+}
+// --- empate lista ↔ convenio del pronóstico ---
+function pronScore(r,p){
+  const a=toks((r.convenio||"")+" "+(r.dependencia||"")), b=toks((p.convenio||"")+" "+(p.grupo||""));
+  if(!a.size||!b.size) return 0; let inter=0; for(const w of a) if(b.has(w)) inter++;
+  if(!inter) return 0; return 0.7*inter/Math.min(a.size,b.size) + 0.3*inter/(a.size+b.size-inter);
+}
+function pronCands(r,n=6){ return [...pron.values()].map(p=>({p,s:pronScore(r,p)})).filter(x=>x.s>0).sort((x,y)=>y.s-x.s||(y.p.t27||0)-(x.p.t27||0)).slice(0,n); }
+function pronFor(r){
+  if(!r) return null;
+  if(r.pronId==="__none") return null;
+  if(r.pronId && pron.has(r.pronId)) return {p:pron.get(r.pronId), manual:true};
+  const c=pronCands(r,1)[0]; return (c && c.s>=0.6) ? {p:c.p, auto:true} : null;
+}
+function listasDe(pid){ return [...rows.values()].filter(r=>pronFor(r)?.p.id===pid); }
+// --- (supervisión) mantener al día quién ve cada convenio ---
+let pronSyncT=null, pronSyncing=false;
+function schedPronSync(){ if(!esJefe) return; clearTimeout(pronSyncT); pronSyncT=setTimeout(syncPronUids,1800); }
+function uidsPara(pid){ const s=new Set(); for(const r of listasDe(pid)){ const u=r.responsableUid||uidDe(r.responsable); if(u) s.add(u); } return [...s].sort(); }
+async function syncPronUids(){
+  if(!esJefe||pronSyncing||!loaded||!equipoLoaded||!pronLoaded||!pron.size) return;
+  pronSyncing=true;
+  try{
+    const ops=[]; for(const p of pron.values()){ const nu=uidsPara(p.id); if(JSON.stringify(nu)!==JSON.stringify([...(p.uids||[])].sort())) ops.push([p.id,nu]); }
+    for(let i=0;i<ops.length;i+=400){ const b=writeBatch(fs); for(const [id,u] of ops.slice(i,i+400)) b.update(doc(fs,C_PCONV,id),{uids:u}); await b.commit(); }
+  }catch(e){ console.warn("No se pudo actualizar quién ve el pronóstico",e); }
+  finally{ pronSyncing=false; }
+}
+// --- cargar el Excel del pronóstico (supervisión) ---
+const pid=(g,c)=>"p"+hashStr(normTxt(g)+"|"+normTxt(c));
+const isMes=h=>/^[A-Z][a-z]{2}-\d{2}$/.test(String(h||"").trim());
+const numv=v=>{ const n=typeof v==="number"?v:Number(String(v??"").replace(/[$,\s]/g,"")); return isFinite(n)?Math.round(n*100)/100:0; };
+function hojaFilas(wb,nombre){ const k=wb.SheetNames.find(n=>normTxt(n)===normTxt(nombre)); return k?XLSX.utils.sheet_to_json(wb.Sheets[k],{header:1,defval:null}):null; }
+function filaEnc(aoa,pred){ for(let i=0;i<Math.min(aoa.length,40);i++) if(pred((aoa[i]||[]).map(x=>String(x??"").trim()))) return i; return -1; }
+async function importPron(file){
+  if(!window.XLSX){ flash("No se pudo cargar el lector de Excel. Recarga la página.","err"); return; }
+  try{
+    flash("Leyendo el pronóstico…");
+    const wb=XLSX.read(await file.arrayBuffer(),{type:"array",cellDates:true});
+    const P=hojaFilas(wb,"Pronostico"); if(!P){ flash("El archivo no tiene la hoja «Pronostico». Usa el Excel de Pronóstico de Pagos (v4).","err"); return; }
+    const hi=filaEnc(P,h=>normTxt(h[0]).startsWith("GRUPO")&&normTxt(h[1]).startsWith("CONVENIO")); if(hi<0){ flash("No encontré los encabezados «Grupo / canal» y «Convenio / dependencia» en la hoja Pronostico.","err"); return; }
+    const H=P[hi].map(x=>String(x??"").trim()); const ix=t=>H.findIndex(h=>normTxt(h).startsWith(normTxt(t)));
+    const iEst=ix("Estatus"), iBase=ix("Base mensual"), iCob=ix("Cobrado"), iPend=H.findIndex(h=>/pendiente/i.test(h)), iT26=H.findIndex(h=>/total oct/i.test(h)), iT27=H.findIndex(h=>/^total 2027/i.test(h));
+    const mesCols=H.map((h,i)=>isMes(h)?i:-1).filter(i=>i>=0);
+    const conv=new Map(); let totalRow=null;
+    for(const row of P.slice(hi+1)){
+      const g=String(row[0]??"").trim(), c=String(row[1]??"").trim(); if(!g) continue;
+      if(/^total/i.test(g)){ totalRow=row; continue; }
+      const id=pid(g,c);
+      conv.set(id,{grupo:g, convenio:c||"(sin nombre)", estatus:String(row[iEst]??"").trim(), base:numv(row[iBase]), cob:iCob>=0?numv(row[iCob]):0, pendOct:iPend>=0?numv(row[iPend]):0,
+        ml:mesCols.map(i=>H[i]), mv:mesCols.map(i=>numv(row[i])), t26:iT26>=0?numv(row[iT26]):0, t27:iT27>=0?numv(row[iT27]):0, hl:[], hv:[], htl:[], htv:[], prog:[]});
+    }
+    const Hs=hojaFilas(wb,"Historico");
+    if(Hs){ const h2=filaEnc(Hs,h=>normTxt(h[0]).startsWith("GRUPO")); if(h2>=0){ const HH=Hs[h2].map(x=>String(x??"").trim()); const mc=HH.map((h,i)=>isMes(h)?i:-1).filter(i=>i>=0); const tc=HH.map((h,i)=>(/^total|ene.?sep/i.test(h))?i:-1).filter(i=>i>1);
+      for(const row of Hs.slice(h2+1)){ const g=String(row[0]??"").trim(), c=String(row[1]??"").trim(); if(!g) continue; const p=conv.get(pid(g,c)); if(!p) continue; p.hl=mc.map(i=>HH[i]); p.hv=mc.map(i=>numv(row[i])); p.htl=tc.map(i=>HH[i]); p.htv=tc.map(i=>numv(row[i])); } } }
+    const Pg=hojaFilas(wb,"Programacion");
+    if(Pg){ const h3=filaEnc(Pg,h=>normTxt(h[0]).startsWith("FECHA")&&h.some(x=>normTxt(x).startsWith("GRUPO"))); if(h3>=0){ const HP=Pg[h3].map(x=>String(x??"").trim()); const jg=HP.findIndex(h=>normTxt(h).startsWith("GRUPO")), jc=HP.findIndex(h=>normTxt(h).startsWith("CONVENIO")), jp=HP.findIndex(h=>h.includes("%")), jm=HP.findIndex(h=>/monto esperado/i.test(h));
+      for(const row of Pg.slice(h3+1)){ const f=row[0]; if(!f) continue; const p=conv.get(pid(row[jg],row[jc])); if(!p) continue;
+        const iso = f instanceof Date ? new Date(f.getTime()+12*3600e3).toISOString().slice(0,10) : parseFecha(f,false);
+        if(iso) p.prog.push({f:iso, m:numv(row[jm]), p:jp>=0?numv(row[jp]):0}); } } }
+    // Resumen por grupo (solo supervisión)
+    const R=hojaFilas(wb,"Resumen"); let meta={archivo:file.name.slice(0,120), cargado:nowIso(), cargadoPor:me.nombre, cols:[], resumen:[], total:null, escenario:"", corte:""};
+    if(R){ const h4=filaEnc(R,h=>normTxt(h[0]).startsWith("GRUPO")); if(h4>=0){ meta.cols=R[h4].slice(1).map(x=>String(x??"").trim()).filter(Boolean);
+      for(const row of R.slice(h4+1)){ const g=String(row[0]??"").trim(); if(!g) break; const v=meta.cols.map((_,k)=>numv(row[k+1])); if(/^total/i.test(g)) meta.total={g,v}; else meta.resumen.push({g,v}); } }
+      const esc0=R.find(r=>normTxt(r?.[0]).startsWith("ESCENARIO")); if(esc0) meta.escenario=String(esc0[1]??"");
+      const nota=String(R[1]?.[0]??""); const m=nota.match(/al ([0-9]{1,2}-[a-z]{3}-[0-9]{4})/i); if(m) meta.corte=m[1]; }
+    if(!conv.size){ flash("No encontré convenios en la hoja Pronostico.","err"); return; }
+    // quién ve cada convenio, con el empate actual de listas
+    const tmp=pron; pron=new Map([...conv].map(([id,p])=>[id,{id,...p}]));
+    for(const p of conv.values()) p.uids=[]; for(const [id,p] of conv) p.uids=uidsPara(id);
+    pron=tmp;
+    const viejos=[...pron.keys()].filter(id=>!conv.has(id));
+    const ops=[...[...conv].map(([id,p])=>b=>b.set(doc(fs,C_PCONV,id),p)), ...viejos.map(id=>b=>b.delete(doc(fs,C_PCONV,id)))];
+    for(let i=0;i<ops.length;i+=300){ const b=writeBatch(fs); ops.slice(i,i+300).forEach(f=>f(b)); await b.commit(); }
+    await setDoc(doc(fs,C_PMETA,"actual"),meta);
+    flash(`Pronóstico cargado: ${conv.size} convenios${viejos.length?` (${viejos.length} que ya no venían se quitaron)`:""}. Revisa en cada lista que el convenio vinculado sea el correcto.`);
+  }catch(e){ console.error(e); e?.code?handleWriteErr(e):flash("No se pudo leer el archivo del pronóstico.","err"); }
+}
+// --- pestaña Pronóstico ---
+function pronRowsFiltradas(){
+  const q=normTxt($("pq").value), g=$("pGrupo").value, solo=$("pSolo").checked;
+  return [...pron.values()].filter(p=>(!g||p.grupo===g)&&(!q||normTxt(p.grupo+" "+p.convenio).includes(q))&&(!solo||listasDe(p.id).length)).sort((a,b)=>(b.t27||0)-(a.t27||0));
+}
+function renderPron(){
+  if(!$("viewP")) return;
+  $("pJefe").hidden=!esJefe;
+  if(esJefe){
+    const m=pronMeta;
+    $("pMeta").textContent = m ? `Archivo: ${m.archivo} · cargado el ${new Date(m.cargado).toLocaleString("es-MX",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})} por ${m.cargadoPor}${m.escenario?` · escenario ${m.escenario}`:""}${m.corte?` · datos reales al ${m.corte}`:""}` : "Aún no se ha cargado el pronóstico. Usa «Cargar pronóstico (Excel)».";
+    const col=t=>m?.cols?.findIndex(c=>normTxt(c).startsWith(normTxt(t)))??-1;
+    const tv=t=>{ const i=col(t); return (m?.total&&i>=0)?m.total.v[i]:null; };
+    $("pk1").textContent=tv("Cierre estimado 2026")!=null?mx0.format(tv("Cierre estimado 2026")):"—";
+    $("pk2").textContent=tv("Pronostico Oct")!=null?mx0.format(tv("Pronostico Oct")):"—";
+    $("pk3").textContent=tv("Pronostico 2027")!=null?mx0.format(tv("Pronostico 2027")):"—";
+    const i25=col("Real 2025"), i26=col("Cierre estimado 2026"), i27=col("Pronostico 2027"), iv=col("Var");
+    $("pRes").innerHTML = m?.resumen?.length ? m.resumen.map(r=>`<tr data-pg="${esc(r.g)}" tabindex="0"><td>${esc(r.g)}</td><td class="r num">${i25>=0?mx0.format(r.v[i25]):"—"}</td><td class="r num">${i26>=0?mx0.format(r.v[i26]):"—"}</td><td class="r num">${i27>=0?mx0.format(r.v[i27]):"—"}</td><td class="r num ${iv>=0&&r.v[iv]<0?"neg":""}">${iv>=0?(r.v[iv]*100).toFixed(1)+"%":"—"}</td></tr>`).join("") : '<tr><td colspan="5" class="empty">Sin resumen.</td></tr>';
+  }
+  { const s=$("pGrupo"), cur=s.value; const gs=[...new Set([...pron.values()].map(p=>p.grupo))].sort((a,b)=>a.localeCompare(b,"es")); s.innerHTML='<option value="">Todos</option>'+gs.map(g=>`<option ${g===cur?"selected":""}>${esc(g)}</option>`).join(""); }
+  const list=pronRowsFiltradas(), mesHoy=mesLab(today);
+  $("pTb").innerHTML = !pronLoaded ? '<tr><td colspan="7" class="empty">Cargando pronóstico…</td></tr>'
+    : list.length ? list.map(p=>{ const k=p.ml?.indexOf(mesHoy)??-1; const n=listasDe(p.id).length;
+      return `<tr data-pid="${esc(p.id)}" tabindex="0"><td>${esc(p.grupo)}</td><td>${esc(p.convenio)}${/sin pagos/i.test(p.estatus)?` <span class="chip">${esc(p.estatus)}</span>`:""}</td><td class="r num">${mx0.format(p.base||0)}</td><td class="r num">${k>=0?mx0.format(p.mv[k]):"—"}</td><td class="r num">${mx0.format(p.t26||0)}</td><td class="r num">${mx0.format(p.t27||0)}</td><td class="r">${n?`<span class="chip">${n} lista${n===1?"":"s"}</span>`:""}</td></tr>`; }).join("")
+    : `<tr><td colspan="7" class="empty">${pron.size?"Ningún convenio coincide con los filtros.":(esJefe?"Aún no hay pronóstico. Usa «Cargar pronóstico (Excel)» y sube tu archivo de Pronóstico de Pagos.":"Todavía no hay pronóstico para los convenios de tus listas.")}</td></tr>`;
+  $("pMesH").textContent=mesHoy;
+}
+function barras(labels,vals,marca){
+  const mx=Math.max(1,...vals.map(v=>v||0));
+  return `<div class="pbars">${labels.map((l,i)=>`<div class="pb${l===marca?" now":""}" title="${esc(l)}: ${mx0.format(vals[i]||0)}"><div class="pbv" style="height:${Math.max(2,Math.round((vals[i]||0)/mx*100))}%"></div><span>${esc(l.slice(0,3))}<br>${esc(l.slice(4))}</span></div>`).join("")}</div>`;
+}
+function openPron(id){
+  const p=pron.get(id); if(!p) return; pronOpen=id;
+  openId=null; if(logUnsub){logUnsub();logUnsub=null;} if(comUnsub){comUnsub();comUnsub=null;}
+  showDrawer();
+  const hoyIso=isoDia(today), mesHoy=mesLab(today), k=p.ml?.indexOf(mesHoy)??-1;
+  const prox=(p.prog||[]).filter(x=>x.f>=hoyIso).sort((a,b)=>a.f.localeCompare(b.f)).slice(0,8);
+  const hist12=(p.hl||[]).slice(-13,-1), hv12=(p.hv||[]).slice(-13,-1);
+  const ls=listasDe(id);
+  $("drawer").innerHTML=`<div class="dhead"><div><div class="eyebrow">Pronóstico de pago · ${esc(p.grupo)}</div><h3>${esc(p.convenio)}</h3>${p.estatus?`<span class="chip">${esc(p.estatus)}</span>`:""}</div><button class="x" id="dClose" aria-label="Cerrar">✕</button></div>
+   <div class="dbody">
+     <div class="facts"><div><span class="eyebrow">Base mensual</span><b class="num">${mx0.format(p.base||0)}</b></div><div><span class="eyebrow">${esc(mesHoy)}</span><b class="num">${k>=0?mx0.format(p.mv[k]):"—"}</b></div><div><span class="eyebrow">Oct–Dic 2026</span><b class="num">${mx0.format(p.t26||0)}</b></div><div><span class="eyebrow">Total 2027</span><b class="num">${mx0.format(p.t27||0)}</b></div></div>
+     <div><div class="eyebrow" style="margin-bottom:6px">Pronóstico por mes</div>${p.ml?.length?barras(p.ml,p.mv,mesHoy):'<div class="fin">Sin meses.</div>'}</div>
+     <div><div class="eyebrow" style="margin-bottom:6px">Próximos depósitos esperados</div>${prox.length?`<div class="ptab">${prox.map(x=>`<div><span>${fmtD(x.f)}</span><b class="num">${mx0.format(x.m)}</b><small>${x.p?Math.round(x.p*100)+"% del mes":""}</small></div>`).join("")}</div>`:'<div class="fin">Sin depósitos programados.</div>'}</div>
+     <div><div class="eyebrow" style="margin-bottom:6px">Histórico real</div>${p.htl?.length?`<div class="ptab">${p.htl.map((l,i)=>`<div><span>${esc(l)}</span><b class="num">${mx0.format(p.htv[i]||0)}</b></div>`).join("")}</div>`:""}${hist12.length?`<div class="fin" style="margin:8px 0 4px">Últimos 12 meses</div>`+barras(hist12,hv12,""):""}</div>
+     <div><div class="eyebrow" style="margin-bottom:6px">Listas de este convenio</div>${ls.length?ls.map(r=>`<div class="fin"><button class="chip" data-pl="${esc(r.id)}">Lista ${esc(r.lista)}</button> ${esc(r.convenio)} · pendiente <b class="num">${mx0.format(pend(r))}</b>${r.responsable?" · "+esc(r.responsable):""}</div>`).join(""):'<div class="fin">Ninguna lista vinculada.</div>'}</div>
+   </div>`;
+  $("dClose").onclick=closeDrawer;
+  $("drawer").querySelectorAll("[data-pl]").forEach(b=>b.onclick=()=>{ pronOpen=null; setTab("L"); openDrawer(b.dataset.pl); });
+}
+// --- sección dentro del detalle de una lista ---
+function renderDrawerPron(){
+  const el=$("dPron"); if(!el||!openId) return; const r=rows.get(openId); if(!r) return;
+  const m=pronFor(r), mesHoy=mesLab(today), hoyIso=isoDia(today);
+  let h=`<div class="eyebrow" style="margin-bottom:6px">Pronóstico de pago</div>`;
+  if(m){ const p=m.p, k=p.ml?.indexOf(mesHoy)??-1; const prox=(p.prog||[]).filter(x=>x.f>=hoyIso).sort((a,b)=>a.f.localeCompare(b.f)).slice(0,2);
+    h+=`<div class="pcard"><div><b>${esc(p.convenio)}</b> <span class="fin">· ${esc(p.grupo)}</span></div>
+      <div class="pfx"><span>${esc(mesHoy)}: <b class="num">${k>=0?mx0.format(p.mv[k]):"—"}</b></span><span>Oct–Dic 2026: <b class="num">${mx0.format(p.t26||0)}</b></span><span>2027: <b class="num">${mx0.format(p.t27||0)}</b></span></div>
+      ${prox.length?`<div class="fin">Próximo esperado: ${prox.map(x=>`${fmtD(x.f)} · <b class="num">${mx0.format(x.m)}</b>`).join(" · ")}</div>`:""}
+      <div class="fin">${m.manual?"Vinculado por supervisión":"Vínculo sugerido automáticamente"}</div>
+      <div class="dacts"><button class="primary" id="dPronVer">Ver pronóstico completo</button></div></div>`;
+  } else h+=`<div class="fin">${!pronLoaded?"Cargando…":pron.size?(r.pronId==="__none"?"Marcado sin pronóstico.":"No se encontró el convenio en el pronóstico."):"Aún no se ha cargado el pronóstico."}</div>`;
+  if(esJefe && pron.size){
+    const cs=pronCands(r,6); const cur=m?.p.id||(r.pronId==="__none"?"__none":"");
+    if(m && !cs.some(c=>c.p.id===m.p.id)) cs.unshift({p:m.p,s:0});
+    h+=`<div class="pasline" style="margin-top:6px"><span>${m?"Cambiar convenio":"Vincular con"}</span><select class="dsel" id="dPronSel" aria-label="Convenio del pronóstico"><option value="">Elegir…</option>${cs.map(c=>`<option value="${esc(c.p.id)}" ${c.p.id===cur?"selected":""}>${esc(c.p.convenio)} · ${esc(c.p.grupo)}</option>`).join("")}<option value="__busca">Buscar en todos…</option><option value="__none" ${cur==="__none"?"selected":""}>No tiene pronóstico</option></select><button class="ghost mini" id="dPronSave">Guardar</button></div>`;
+  }
+  el.innerHTML=h;
+  if($("dPronVer")) $("dPronVer").onclick=()=>{ const id=m.p.id; closeDrawer(); setTab("P"); openPron(id); };
+  if($("dPronSel")) $("dPronSel").onchange=()=>{ if($("dPronSel").value==="__busca"){ const sel=$("dPronSel"); const all=[...pron.values()].sort((a,b)=>a.grupo.localeCompare(b.grupo,"es")||a.convenio.localeCompare(b.convenio,"es")); sel.innerHTML='<option value="">Elegir…</option>'+all.map(p=>`<option value="${esc(p.id)}">${esc(p.grupo)} · ${esc(p.convenio)}</option>`).join("")+'<option value="__none">No tiene pronóstico</option>'; } };
+  if($("dPronSave")) $("dPronSave").onclick=async()=>{ const v=$("dPronSel").value; if(!v||v==="__busca"){ flash("Elige el convenio del pronóstico.","err"); return; }
+    try{ await updateDoc(doc(fs,C_LISTAS,r.id),{pronId:v, ...firma()}); r.pronId=v; flash(v==="__none"?"Lista marcada sin pronóstico.":"Convenio del pronóstico vinculado a la lista."); renderDrawerPron(); schedPronSync(); }catch(e){ handleWriteErr(e); } };
+}
+
 /* ---------- eventos ---------- */
-$("tabL").onclick=()=>setTab("L"); $("tabT").onclick=()=>setTab("T");
+$("tabL").onclick=()=>setTab("L"); $("tabT").onclick=()=>setTab("T"); $("tabP").onclick=()=>setTab("P");
+$("btnPron").onclick=()=>$("pFile").click(); $("pFile").onchange=()=>{ const f=$("pFile").files[0]; if(f) importPron(f); $("pFile").value=""; };
+["pq","pGrupo","pSolo"].forEach(id=>$(id).addEventListener("input",renderPron));
+const pTbClick=e=>{ const tr=e.target.closest("tr[data-pid]"); if(tr) openPron(tr.dataset.pid); };
+$("pTb").addEventListener("click",pTbClick); $("pTb").addEventListener("keydown",e=>{ if(e.key==="Enter") pTbClick(e); });
+const pResClick=e=>{ const tr=e.target.closest("tr[data-pg]"); if(!tr) return; $("pGrupo").value=$("pGrupo").value===tr.dataset.pg?"":tr.dataset.pg; renderPron(); $("pTb").closest(".tablebox").scrollIntoView({behavior:"smooth",block:"start"}); };
+$("pRes").addEventListener("click",pResClick); $("pRes").addEventListener("keydown",e=>{ if(e.key==="Enter") pResClick(e); });
 ["tq","tPri"].forEach(id=>$(id).addEventListener("input",renderTasks));
 const tWhoClick=e=>{ const b=e.target.closest(".bar"); if(!b||b.dataset.who==="Sin asignar") return; $("viewAs").value=$("viewAs").value===b.dataset.who?"":b.dataset.who; store.set("viewAs:"+me.uid,$("viewAs").value); render(); };
 $("tWho").addEventListener("click",tWhoClick); $("tWho").addEventListener("keydown",e=>{if(e.key==="Enter")tWhoClick(e);});
@@ -2645,7 +2876,7 @@ $("tCols").addEventListener("click", async e=>{
 });
 ["q","fFin","fSt","fWho"].forEach(id=>$(id).addEventListener("input",()=>{selected.clear();render();}));
 $("viewAs").addEventListener("change",()=>{store.set("viewAs:"+me.uid,$("viewAs").value);selected.clear();render();});
-$("btnClear").onclick=()=>{["q","fFin","fSt","fWho"].forEach(id=>$(id).value="");render();};
+$("btnClear").onclick=()=>{["q","fFin","fSt","fWho"].forEach(id=>$(id).value=""); if(kpiF) setKpiF(kpiF); else render();};
 document.querySelectorAll("th[data-k]").forEach(th=>th.onclick=()=>{const k=th.dataset.k; sort = sort.k===k?{k,dir:-sort.dir}:{k,dir:(k==="importe"||k==="dias")?-1:1}; render();});
 $("tb").addEventListener("click",e=>{ { const celda=e.target.closest("td"); if(celda&&!e.target.closest(".rowSel")){ const c=celda.querySelector(".rowSel"); if(c){ c.click(); return; } } }   // toda la celda de la casilla sirve para marcarla
   const cb=e.target.closest(".rowSel"); if(cb){ cb.checked?selected.add(cb.dataset.id):selected.delete(cb.dataset.id); render(); return; } const tr=e.target.closest("tr[data-id]"); if(tr) openDrawer(tr.dataset.id); });
