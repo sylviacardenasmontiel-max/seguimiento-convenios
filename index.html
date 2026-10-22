@@ -2920,7 +2920,8 @@ function paAgenda(o, esperado, corte, inactivo){
     if((realMes.get(k)||0) >= 0.7*(espMes.get(k)||0) && (realMes.get(k)||0)>0) f.st="probable"; }
   const R2=v=>Math.round(v);
   return { lag, lo, hi, conf, n, tipos, monto:R2(filas.length? filas.reduce((s,f)=>s+f.monto,0)/filas.length : 0),
-    q: filas.map(f=>[paIso(f.q),paIso(f.est),paIso(f.lo),paIso(f.hi),R2(f.monto),f.st,f.realF?paIso(f.realF):null,f.realM!=null?R2(f.realM):null]) };
+    // Firebase no acepta listas dentro de listas: cada quincena va como texto "q|est|lo|hi|monto|estatus|fechaReal|montoReal"
+    q: filas.map(f=>[paIso(f.q),paIso(f.est),paIso(f.lo),paIso(f.hi),R2(f.monto),f.st,f.realF?paIso(f.realF):"",f.realM!=null?R2(f.realM):""].join("|")) };
 }
 
 // Calcula el pronóstico completo. opts: {factor, escenario, crec:{grupo:0.05}, corte:Date}
@@ -3035,7 +3036,7 @@ function paCalcular(movs, opts={}){
     const fc=new Map(futuros.map(([y,m],i)=>[mk(y,m),mv[i]]));
     const esperado=(y,m)=> fc.has(mk(y,m)) ? fc.get(mk(y,m)) : base*idx[m-1]*factor;
     const ag = sinDep ? null : paAgenda(o, esperado, corte, inactivo);
-    const hd = o.movs.filter(x=>x.f<=corte).sort((a,b)=>a.f-b.f).map(x=>[paIso(x.f), paTags(x.seg).map(paQName).join(", "), Math.round(x.a*100)/100, x.ref]);
+    const hd = o.movs.filter(x=>x.f<=corte&&!x.combinado).sort((a,b)=>a.f-b.f).map(x=>[paIso(x.f), paTags(x.seg).map(paQName).join(", "), Math.round(x.a*100)/100, String(x.ref||"").replace(/\|/g," ")].join("|"));
     docs.set(pid(o.g,o.c), {lr:lResto0, ls:String(Y+1), co:paIso(corte), grupo:o.g, convenio:o.c, estatus: sinDep?"Sin depósitos identificados en el banco":inactivo?("Sin pagos desde "+ultLab):"Activo", deLista:!!o.deLista,
       base:Math.round(base*100)/100, cob:Math.round(cob*100)/100, pendOct:Math.round(pendOct*100)/100, ml, mv,
       t26:Math.round(t26*100)/100, t27:Math.round(t27*100)/100, hl, hv, htl, htv, prog, ag, hd});
@@ -3062,7 +3063,12 @@ async function guardarPronCalculado(conv, meta){
   pron=tmp;
   const viejos=[...pron.keys()].filter(id=>!conv.has(id));
   const ops=[...[...conv].map(([id,p])=>b=>b.set(doc(fs,C_PCONV,id),p)), ...viejos.map(id=>b=>b.delete(doc(fs,C_PCONV,id)))];
-  for(let i=0;i<ops.length;i+=300){ const b=writeBatch(fs); ops.slice(i,i+300).forEach(f=>f(b)); await b.commit(); }
+  // paquetes de hasta 300 movimientos o ~3 MB (límite de Firebase por envío)
+  const pesos=[...[...conv].map(([id,p])=>JSON.stringify(p).length), ...viejos.map(()=>100)];
+  let i=0, n=0; const tot=ops.length;
+  while(i<ops.length){ const b=writeBatch(fs); let peso=0, k=0;
+    while(i<ops.length && k<300 && (k===0 || peso+pesos[i]<3e6)){ ops[i](b); peso+=pesos[i]; i++; k++; }
+    await b.commit(); n+=k; flash(`Guardando pronóstico… ${n} de ${tot}`); }
   await setDoc(doc(fs,C_PMETA,"actual"),meta);
   return viejos.length;
 }
@@ -3238,9 +3244,9 @@ async function abrirPronAgenda(){
   const D={corte: ps.map(p=>p.co||"").sort().pop() || isoDia(today), conv:[], rows:[]}, HD={deps, convs, rows:[]};
   for(const p of ps){ const g=p.grupo, c=p.convenio, a=p.ag;
     D.conv.push({dep:g, conv:c, lag:a.lag, lo:a.lo, hi:a.hi, conf:a.conf, n:a.n, tipos:a.tipos, monto:a.monto});
-    for(const r of a.q) D.rows.push([g,c,...r]);
+    for(const r0 of a.q){ const r=String(r0).split("|"); D.rows.push([g,c,r[0],r[1],r[2],r[3],+r[4]||0,r[5],r[6]||null,r[7]===""||r[7]==null?null:+r[7]]); }
     const d=ix(deps,di,g), k=ix(convs,ci,c);
-    for(const h of (p.hd||[])) HD.rows.push([h[0],d,k,h[1]||"",h[2],h[3]||""]);
+    for(const h0 of (p.hd||[])){ const h=String(h0).split("|"); HD.rows.push([h[0],d,k,h[1]||"",+h[2]||0,h[3]||""]); }
   }
   HD.rows.sort((x,y)=>x[0]<y[0]?-1:x[0]>y[0]?1:0);
   const js=o=>JSON.stringify(o).replace(/</g,"\\u003c");
