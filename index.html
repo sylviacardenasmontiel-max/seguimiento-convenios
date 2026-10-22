@@ -2899,7 +2899,7 @@ function paAgenda(o, esperado, corte, inactivo){
   const desde=new Date(corte.getFullYear()-1,corte.getMonth(),corte.getDate());
   const lagT=[], lagR=[], tipT={"15":0,fin:0}, tipR={"15":0,fin:0};
   for(const x of o.movs){ if(x.f<desde||x.f>corte) continue;
-    const ts=paTags(x.seg);
+    const ts=x.qs||paTags(x.seg);
     if(ts.length){ for(const q of ts){ const l=paDias(q,x.f); if(l>=-10&&l<=120){ lagT.push(l); tipT[q.getDate()===15?"15":"fin"]++; } } }
     else { const d=x.f.getDate(); const q=d>=15?new Date(x.f.getFullYear(),x.f.getMonth(),15):new Date(x.f.getFullYear(),x.f.getMonth(),0); lagR.push(paDias(q,x.f)); tipR[d>=15?"15":"fin"]++; } }
   const usaT=lagT.length>=3, lags=usaT?lagT:lagR, tip=usaT?tipT:tipR;
@@ -2918,7 +2918,7 @@ function paAgenda(o, esperado, corte, inactivo){
   // depósitos reales: los que dicen la quincena ("Q 15SEP26") se marcan pagados; los demás se buscan en su ventana
   const porQ=new Map(filas.map(f=>[f.q.getTime(),f]));
   const usados=new Set();
-  o.movs.forEach((x,i)=>{ if(x.f>corte) return; const ts=paTags(x.seg).filter(q=>porQ.has(q.getTime())); if(!ts.length) return; usados.add(i);
+  o.movs.forEach((x,i)=>{ if(x.f>corte) return; const ts=(x.qs||paTags(x.seg)).filter(q=>porQ.has(q.getTime())); if(!ts.length) return; usados.add(i);
     for(const q of ts){ const f=porQ.get(q.getTime()); f.st="pagada"; f.realM=(f.realM||0)+(x.combinado?f.monto:x.a)/ts.length; if(!f.realF||x.f>f.realF) f.realF=x.f; } });
   const libres=o.movs.map((x,i)=>({x,i})).filter(({x,i})=>!usados.has(i)&&!x.combinado&&x.f<=corte&&x.f>=new Date(y0,m0-1,1)).sort((a,b)=>a.x.f-b.x.f);
   for(const f of filas){ if(f.st==="pagada") continue;
@@ -2937,6 +2937,102 @@ function paAgenda(o, esperado, corte, inactivo){
     q: filas.map(f=>[paIso(f.q),paIso(f.est),paIso(f.lo),paIso(f.hi),R2(f.monto),f.st,f.realF?paIso(f.realF):"",f.realM!=null?R2(f.realM):""].join("|")) };
 }
 
+// ---------- Catálogo de convenios de la Agenda de Cobro Quincenal (mismas reglas que la agenda) ----------
+const PA_CL=(function(){
+const MREX='(ENE|FEB|MAR|ABR|MAY|JUN|JUL|AGO|SEP|OCT|NOV|DIC)';
+const NAMES={'SEP':'SEP','GOBIERNO CDMX':'Gobierno CDMX (directo)','GOBIERNO NUEVO LEON':'Gobierno de Nuevo León','UNICREDIX':'Unicredix','CONAGUA':'CONAGUA','IMPULSO NOMINA':'Impulsa tu Nómina','INNODI':'INNODI','BROXEL GOB EDO MEX':'Broxel - Gob. Edo. de México','POR TU NOMINA (XTUNOM)':'Por tu Nómina','SALUD NUEVO LEON':'Salud Nuevo León','INSTITUTO REGISTRAL Y CATASTRAL NL':'Instituto Registral y Catastral NL','IMSS BIENESTAR':'IMSS Bienestar'};
+const MERGE={'INSTITUTO DE PENSIONES DE OAXACA':'OFICINA DE PENSIONES OAXACA (MENSUAL)','OFICINA DE PENSIONES OAXACA':'OFICINA DE PENSIONES OAXACA (MENSUAL)','GOBIERNO CDMX (CENTRAL)':'GOBIERNO CDMX CENTRAL + SEDESA (UA 24)','SEDESA CDMX (UA 24)':'GOBIERNO CDMX CENTRAL + SEDESA (UA 24)','GOBIERNO DE OAXACA SECTOR CENTRAL':'GOBIERNO DE OAXACA (CENTRAL + DESCENTRALIZADO)','GOBIERNO DE OAXACA SECTOR DESCEN':'GOBIERNO DE OAXACA (CENTRAL + DESCENTRALIZADO)','GOBIERNO DE OAXACA SECTOR CENTRA':'GOBIERNO DE OAXACA (CENTRAL + DESCENTRALIZADO)','SEP 38 - TECNOLOGICO NACIONAL DE MEXICO':'SEP 38 SECTOR CENTRAL'};
+function norm(k){
+  k=k.replace(new RegExp('\\s*\\b(Q|QNA)?\\s*\\d{1,2}\\s*-?'+MREX+'\\s*-?\\d{2,4}\\b[\\s\\S]*'),'');
+  k=k.replace(/\s+CL-?\d+[\s\S]*/,'');
+  return k.trim().slice(0,60);
+}
+function grp(k,c){
+  if(k.startsWith('SEP 3'))return 'SEP';
+  if(k.startsWith('GOBIERNO DEL DISTRITO FEDERAL')||k.startsWith('GOBIERNO DE LA CDMX'))return 'GOBIERNO CDMX';
+  if(k.includes('REGISTRAL'))return 'INSTITUTO REGISTRAL Y CATASTRAL NL';
+  if(k.startsWith('SALUD NUEVO LEON'))return 'SALUD NUEVO LEON';
+  if(k.startsWith('GOBIERNO DEL ESTADO DE NUEVO LEON')||k.startsWith('GOB NL'))return 'GOBIERNO NUEVO LEON';
+  if(k.includes('UNICREDIX')&&!c.includes('ERRONEO'))return 'UNICREDIX';
+  if(k.startsWith('CONAGUA'))return 'CONAGUA';
+  if(k.startsWith('IMPULSO NOMINA'))return 'IMPULSO NOMINA';
+  if(k.startsWith('INNODI'))return 'INNODI';
+  if(k.startsWith('BROXEL')&&k.includes('ESTADO DE MEXICO'))return 'BROXEL GOB EDO MEX';
+  if(k.startsWith('XTUNOM'))return 'POR TU NOMINA (XTUNOM)';
+  if(k.startsWith('IMSS BIENESTAR'))return 'IMSS BIENESTAR';
+  return null;
+}
+function sub(k,G){
+  k=k.replace(/\n/g,' ');
+  if(G==='UNICREDIX'){
+    const T=[['SEDESA','SEDESA CDMX (UA 24)'],['FISCALIA','FISCALIA GENERAL CDMX'],['JUVENTUD','INST. DE LA JUVENTUD'],['TRANSPORTE','ORG. REG. TRANSPORTE'],['VICTIMAS','COM. EJEC. ATN. VICTIMAS'],['BOMBEROS','BOMBEROS CDMX'],['MEDIOS PUBLICOS','SERV. MEDIOS PUBLICOS'],['SEGOB','SEGOB'],['SNTE 21','SNTE 21'],['FIDEICOMISO','OTROS GOB CDMX'],['INST EST SUP','OTROS GOB CDMX']];
+    for(const [a,b] of T) if(k.includes(a))return b;
+    if(k==='UNICREDIX - GOBIERNO CDMX (ING)')return 'GOBIERNO CDMX (CENTRAL)';
+    if(k==='UNICREDIX')return 'UNICREDIX (SIN CONVENIO EN REFERENCIA)';
+    return 'LOTES / DOMICILIACION / LIQUIDACIONES';
+  }
+  if(['IMPULSO NOMINA','INNODI','POR TU NOMINA (XTUNOM)','SALUD NUEVO LEON','SEP','GOBIERNO CDMX','BROXEL GOB EDO MEX'].includes(G)){
+    let s=k.replace(/^(IMPULSO NOMINA|INNODI SURESTE|XTUNOM|BROXEL)\s*-\s*/,'');
+    s=s.replace(/\s+Q\s*\d[\s\S]*$/,'').replace(/Q$/,'').trim();
+    s=s.split('SECRETARIA DE EDUCACION TABASCO FEDERAL').join('SEC EDU TABASCO FEDERAL').split('FEDERALN').join('FEDERAL').split('SECRETARIA DE SALUD TABASCO FEDERAL').join('SEC DE SALUD TABASCO FEDERAL');
+    s=s.replace(/TELESEC.*EJECUTI.*/,'TELESEC/EJECUTIVA');
+    s=s.split(' / CR PROPIOS').join('').split('CATORCENAL CAT').join('CATORCENAL').split('CALIFORNIA CAT').join('CALIFORNIA CATORCENAL');
+    s=s.split('INSTITUTO DE PENSIONES DE OAXACA AL').join('INSTITUTO DE PENSIONES DE OAXACA').split('OFICINA DE PENSIONES OAXACA AL').join('OFICINA DE PENSIONES OAXACA');
+    if(s.startsWith('SALUD NUEVO LEON'))s=s.split('SALUD NUEVO LEON (ING) - ').join('').split('SALUD NUEVO LEON').join('SIN DETALLE');
+    if(G==='GOBIERNO CDMX')s=s.split('GOBIERNO DEL DISTRITO FEDERAL (CDMX)').join('GDF CENTRAL').split('GOBIERNO DE LA CDMX - ').join('');
+    return s;
+  }
+  return G;
+}
+function clean(s){
+  s=s.replace(/\s+(COMPL|COMPLEMENTO|CL-.*|LOTE ID.*|\d{4,}.*)$/,'');
+  s=s.replace(/(CATORCENAL)+(ORCENA(L)?)?( CAT| AL|\d.*)?$/,'CATORCENAL');
+  s=s.replace(/\s*\/\s*\/.*$/,'').replace(/MEXICOLI$/,'MEXICO').replace(/\s+(A|COMP)$/,'');
+  s=s.split('SEC EDU TABASCO ESTATAL - TELESEC/EJECUTIVA').join('SEC EDU TABASCO ESTATAL - TELESEC');
+  if(s.startsWith('GOBIERNO DE BAJA CALIFORNIA')&&!s.includes('MAGISTERIO'))s='GOBIERNO DE BAJA CALIFORNIA (QUINC/CATORC)';
+  if(s==='GOBIERNO DE LA CDMX -SALUD - GS TN1 FE'||s.startsWith('SALUD'))s=(s!=='SALUD')?'SALUD (VARIOS)':'SALUD';
+  s=s.split('GOBIERNO DE LA CDMX- ').join('').split('COM EJEC ATENCION VICTIMA').join('COM EJEC ATENCION VICTIMAS').split('VICTIMASS').join('VICTIMAS');
+  s=s.split('SEC EDU TABASCO ESTATAL - EJECUTI').join('SEC EDU TABASCO ESTATAL - EJECUTIVA').split('SEC DE SALUD').join('SEC SALUD');
+  if(s==='FORMALIZADO 3 CL-')s='FORMALIZADO 3';
+  return s.trim();
+}
+const TAG=/\b(?:Q|AL)\s*(\d{1,2})\s*-?(ENE|FEB|MAR|ABR|MAY|JUN|JUL|AGO|AG|SEP|OCT|NOV|DIC)\s*-?(\d{2,4})\b/;
+const MN={ENE:1,FEB:2,MAR:3,ABR:4,MAY:5,JUN:6,JUL:7,AGO:8,AG:8,SEP:9,OCT:10,NOV:11,DIC:12};
+function tagQ(seg){const m=seg.match(TAG);if(!m)return null;let dd=+m[1],mo=MN[m[2]],y=+m[3];if(y<100)y+=2000;
+  return dd<=20?new Date(y,mo-1,15):new Date(y,mo,0)}
+/* raw base classification of a comment (returns {G,S} or null) */
+function base(c){
+  const C=String(c==null?'nan':c).toUpperCase();
+  const k=norm(C.split('//')[0].trim());
+  const G=grp(k,C); if(!G)return null;
+  let S=clean(sub(k,G));
+  if(G==='GOBIERNO CDMX'&&(S==='SALUD'||S==='SALUD (VARIOS)'))S='SALUD';
+  return {G,S,C};
+}
+/* full: comment+amount -> {dep,conv,tags:[{conv,q}]} ; saludRef: {conv:monto} */
+function classify(c,monto,saludRef){
+  const b=base(c); if(!b)return null;
+  let {G,S,C}=b;
+  if(S==='COBATAB')return null;
+  if(G==='SALUD NUEVO LEON'&&S==='SIN DETALLE'&&saludRef){let best=null,bd=1e18;for(const k in saludRef){const d=Math.abs(saludRef[k]-monto);if(d<bd){bd=d;best=k}}if(best)S=best}
+  if(G==='GOBIERNO CDMX'&&S==='GDF CENTRAL'&&monto<5000&&!/\bQ\s*\d/.test(C))S=monto<1200?'SALUD PPS':'SALUD AMI';
+  if(G==='UNICREDIX'&&S==='UNICREDIX (SIN CONVENIO EN REFERENCIA)'&&monto>5e6)S='GOBIERNO CDMX (CENTRAL)';
+  S=MERGE[S]||S;
+  const tags=[];
+  for(const seg0 of C.split('+')){const seg=seg0.trim();const q=tagQ(seg);if(!q)continue;const bb=base(seg);if(!bb)continue;let s2=MERGE[bb.S]||bb.S;if(s2==='COBATAB')continue;tags.push({dep:NAMES[bb.G],conv:s2,q})}
+  return {dep:NAMES[G],conv:S,tags,tagged:TAG.test(C)};
+}
+return {classify,base,NAMES};
+})();
+const PA_CATALOGO=new Set(["SEP|SEP 33 ADMINISTRADORA FEDERAL SERVICIOS EDUC DF", "SEP|SEP 34 SUBDIRECCION EDUCACION MEDIA SUPERIOR", "SEP|SEP 38 SECTOR CENTRAL", "Gobierno CDMX (directo)|FISCALIA GENERAL", "Gobierno CDMX (directo)|GDF CENTRAL", "Gobierno CDMX (directo)|SALUD AMI", "Gobierno CDMX (directo)|SALUD PPS", "Gobierno de Nuevo León|GOBIERNO NUEVO LEON", "Unicredix|BOMBEROS CDMX", "Unicredix|FISCALIA GENERAL CDMX", "Unicredix|GOBIERNO CDMX CENTRAL + SEDESA (UA 24)", "Unicredix|INST. DE LA JUVENTUD", "Unicredix|SNTE 21", "CONAGUA|CONAGUA", "Impulsa tu Nómina|GOBIERNO DE OAXACA (CENTRAL + DESCENTRALIZADO)", "Impulsa tu Nómina|GOBIERNO DEL ESTADO DE HIDALGO", "Impulsa tu Nómina|IEBO", "Impulsa tu Nómina|IMSS BIENESTAR", "Impulsa tu Nómina|OFICINA DE PENSIONES OAXACA (MENSUAL)", "Impulsa tu Nómina|SERVICIOS DE SALUD PUEBLA", "Impulsa tu Nómina|SERVICIOS DE SALUD TLAXCALA", "INNODI|SEC DE EDUCACION PUEBLA SNTE 23", "INNODI|SEC EDU TABASCO ESTATAL - EJECUTIVA", "INNODI|SEC EDU TABASCO FEDERAL", "Broxel - Gob. Edo. de México|GOBIERNO DEL ESTADO DE MEXICO", "Por tu Nómina|GOBIERNO DE BAJA CALIFORNIA (QUINC/CATORC)", "Por tu Nómina|GOBIERNO DE BAJA CALIFORNIA MAGISTERIO", "Por tu Nómina|GOBIERNO DE SINALOA", "Por tu Nómina|SEDESA PUEBLA", "Por tu Nómina|SEDESA TLAXCALA", "Salud Nuevo León|ESTATAL HOM", "Salud Nuevo León|FEDERAL 420", "Salud Nuevo León|FORMALIZADO 1", "Salud Nuevo León|FORMALIZADO 2", "Salud Nuevo León|FORMALIZADO 3", "Salud Nuevo León|REGULARIZADO", "Instituto Registral y Catastral NL|INSTITUTO REGISTRAL Y CATASTRAL NL", "IMSS Bienestar|IMSS BIENESTAR"]);
+const PA_SALUD_REF={"ESTATAL HOM":22800,"FEDERAL 420":172915,"FORMALIZADO 1":97449,"FORMALIZADO 2":6739,"FORMALIZADO 3":1138,"REGULARIZADO":48115};
+function paClasificaAgenda(com, monto){
+  let r=null; try{ r=PA_CL.classify(com, monto, PA_SALUD_REF); }catch(e){ r=null; }
+  if(!r||!r.dep||!r.conv) return null;
+  const mismo=t=>t.dep===r.dep&&t.conv===r.conv;
+  return {g:r.dep, c:r.conv, qs:r.tags.filter(mismo).map(t=>t.q), otros:r.tags.filter(t=>!mismo(t)&&t.dep&&t.conv)};
+}
+
 // Calcula el pronóstico completo. opts: {factor, escenario, crec:{grupo:0.05}, corte:Date}
 function paCalcular(movs, opts={}){
   const factor=opts.factor??1, crec=opts.crec||{};
@@ -2949,18 +3045,32 @@ function paCalcular(movs, opts={}){
   const raw=new Map(); // "g|c" -> {g,c,mes:Map(mk->monto), dias:[{d,a}], ult:mk}
   for(const x of movs){
     if(x.f>corte) continue;
-    const r=paClasifica(x.c); if(!r) continue;
     const y=x.f.getFullYear(), m=x.f.getMonth()+1; if(y<Y-3) continue;
-    const k=r[0]+"|"+r[1]; let o=raw.get(k); if(!o){ o={g:r[0],c:r[1],mes:new Map(),dias:[],ult:0,movs:[]}; raw.set(k,o); }
+    const nuevo=(g,c)=>{ const k=g+"|"+c; let o=raw.get(k); if(!o){ o={g,c,mes:new Map(),dias:[],ult:0,movs:[]}; raw.set(k,o); } return o; };
+    let o;
+    if(opts.catalogo){
+      const ra=paClasificaAgenda(x.c, x.a); if(!ra) continue;
+      o=nuevo(ra.g, ra.c); o.movs.push({f:x.f, a:x.a, seg:"", qs:ra.qs, ref:x.ref||""});
+      for(const t of ra.otros) nuevo(t.dep, t.conv).movs.push({f:x.f, a:0, seg:"", qs:[t.q], ref:x.ref||"", combinado:true});
+    } else {
+    const r=paClasifica(x.c); if(!r) continue;
+    o=nuevo(r[0], r[1]);
     o.movs.push({f:x.f, a:x.a, seg:r[2]||"", ref:x.ref||""});
     const segs=paNorm(x.c).split("//")[0].split("+").map(t=>t.trim()).filter(t=>t&&t!==r[2]&&paTags(t).length);
     for(const sg of segs){ const r2=paClasifica1(sg); if(!r2||r2[0]==="?"||(r2[0]===r[0]&&r2[1]===r[1])) continue;
       const k2=r2[0]+"|"+r2[1]; let o2=raw.get(k2); if(!o2){ o2={g:r2[0],c:r2[1],mes:new Map(),dias:[],ult:0,movs:[]}; raw.set(k2,o2); }
       o2.movs.push({f:x.f, a:0, seg:sg, ref:x.ref||"", combinado:true}); }
+    }
     o.mes.set(mk(y,m),(o.mes.get(mk(y,m))||0)+x.a);
     if(y===Y) o.dias.push({d:x.f.getDate(),a:x.a});
     o.ult=Math.max(o.ult,mk(y,m));
   }
+  let conv;
+  if(opts.catalogo){ conv=new Map();
+    for(const o of raw.values()){ const k=o.g+"|"+o.c; let ytd=0; for(let m=1;m<=M;m++) ytd+=o.mes.get(mk(Y,m))||0;
+      // los convenios de la Agenda siempre; uno nuevo entra si ya cobró más de $200 mil en el año
+      if(PA_CATALOGO.has(k) || (ytd>=200000 && o.ult>=mk(...(d=>[d.getFullYear(),d.getMonth()+1])(new Date(Y,M-1-3,1))))) conv.set(k,{...o, ig:o.g, deLista:true}); } }
+  else {
   // 2. Cada convenio del banco se liga al convenio de tus listas que más se le parece (misma financiera,
   //    o convenio "directo" sin financiera). Las variantes del mismo convenio se suman en un solo renglón.
   const listas=[...new Map((opts.listas||[]).filter(l=>l.convenio).map(l=>[paNorm(l.financiera)+"|"+paNorm(l.convenio),l])).values()];
@@ -2980,7 +3090,7 @@ function paCalcular(movs, opts={}){
     }
     if(best) best.miembros.push(o); else sueltos.push(o);
   }
-  const conv=new Map();
+  conv=new Map();
   const juntar=(k,g,c,ms,extra)=>{ const t={g,c,mes:new Map(),dias:[],ult:0,ig:null,movs:[],...extra}; let mx=-1;
     for(const o of ms){ let tot=0; for(const [kk,v] of o.mes){ t.mes.set(kk,(t.mes.get(kk)||0)+v); tot+=v; } t.dias.push(...o.dias); t.movs.push(...o.movs); t.ult=Math.max(t.ult,o.ult); if(tot>mx){ mx=tot; t.ig=o.g; } }
     conv.set(k,t); };
@@ -2994,6 +3104,7 @@ function paCalcular(movs, opts={}){
     else { const k="B|"+g+"|"+o.c; if(conv.has(k)){ const t=conv.get(k); for(const [kk,v] of o.mes) t.mes.set(kk,(t.mes.get(kk)||0)+v); t.dias.push(...o.dias); t.movs.push(...o.movs); t.ult=Math.max(t.ult,o.ult); } else juntar(k,g,o.c,[o],{}); }
   }
   for(const [g,ms] of chicos) juntar("B|"+g+"|"+PA_OTROS, g, PA_OTROS, ms, {});
+  }
   // 3. índices estacionales por grupo
   const grupos=[...new Set([...raw.values()].map(o=>o.g))];
   const IDX={};
@@ -3050,7 +3161,7 @@ function paCalcular(movs, opts={}){
     const fc=new Map(futuros.map(([y,m],i)=>[mk(y,m),mv[i]]));
     const esperado=(y,m)=> fc.has(mk(y,m)) ? fc.get(mk(y,m)) : base*idx[m-1]*factor;
     const ag = sinDep ? null : paAgenda(o, esperado, corte, inactivo);
-    const hd = o.movs.filter(x=>x.f<=corte&&!x.combinado).sort((a,b)=>a.f-b.f).map(x=>[paIso(x.f), paTags(x.seg).map(paQName).join(", "), Math.round(x.a*100)/100, String(x.ref||"").replace(/\|/g," ")].join("|"));
+    const hd = o.movs.filter(x=>x.f<=corte&&!x.combinado).sort((a,b)=>a.f-b.f).map(x=>[paIso(x.f), (x.qs||paTags(x.seg)).map(paQName).join(", "), Math.round(x.a*100)/100, String(x.ref||"").replace(/\|/g," ")].join("|"));
     docs.set(pid(o.g,o.c), {lr:lResto0, ls:String(Y+1), co:paIso(corte), grupo:o.g, convenio:o.c, estatus: sinDep?"Sin depósitos identificados en el banco":inactivo?("Sin pagos desde "+ultLab):"Activo", deLista:!!o.deLista,
       base:Math.round(base*100)/100, cob:Math.round(cob*100)/100, pendOct:Math.round(pendOct*100)/100, ml, mv,
       t26:Math.round(t26*100)/100, t27:Math.round(t27*100)/100, hl, hv, htl, htv, prog, ag, hd});
@@ -3097,8 +3208,7 @@ async function actualizarPronBanco(file){
     const anios=new Set(movs.map(x=>x.f.getFullYear()));
     const sel=$("pEsc"); const factor=+sel.value||1, escenario=sel.options[sel.selectedIndex].text.replace(/ \(.*\)$/,"");
     const listas=[...rows.values()].map(r=>({financiera:r.financiera, convenio:r.convenio, dependencia:r.dependencia}));
-    if(!listas.length){ flash("No hay listas cargadas todavía: el pronóstico se arma con los convenios de tus listas.","err"); return; }
-    const R=paCalcular(movs,{factor,escenario,listas,soloListas:true});
+    const R=paCalcular(movs,{factor,escenario,catalogo:true});
     const Y=+String(R.meta.corte).slice(-4);
     const faltan=[Y-3,Y-2,Y-1].filter(y=>!anios.has(y));
     const meta={...R.meta, archivo:file.name.slice(0,120), cargado:nowIso(), cargadoPor:me.nombre, indices:Object.fromEntries(Object.entries(R.idx).map(([g,v])=>[g.replace(/[.\/]/g," "),v]))};
