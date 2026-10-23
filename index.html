@@ -468,7 +468,7 @@ table.ptbl td:nth-child(2){overflow-wrap:anywhere}table.ptbl td.num{white-space:
         <div class="kpi"><span class="eyebrow" id="pkl2">Pronóstico Oct–Dic 2026</span><span class="v" id="pk2">—</span><span class="d">Lo que falta por cobrar este año</span></div>
         <div class="kpi"><span class="eyebrow" id="pkl3">Pronóstico 2027</span><span class="v" id="pk3">—</span><span class="d">Todas las carteras</span></div>
       </section>
-      <div class="pmeta"><span class="fin" id="pMeta"></span><span class="pacts"><label class="inline" for="pEsc">Escenario<select id="pEsc"><option value="1">Base</option><option value="0.9">Conservador (−10%)</option><option value="1.1">Optimista (+10%)</option></select></label><button id="btnPronBanco" title="Sube tu archivo de movimientos del banco (bancos.xlsx con las hojas de cada año) y el pronóstico se recalcula solo">Actualizar con movimientos del banco</button><input type="file" id="pBanco" accept=".xlsx,.xls" hidden><button class="ghost" id="btnPron" title="Opcional: subir un Excel de pronóstico ya armado (formato v4)">Cargar Excel de pronóstico</button><input type="file" id="pFile" accept=".xlsx,.xls" hidden></span></div>
+      <div class="pmeta"><span class="fin" id="pMeta"></span><span class="pacts"><label class="inline" for="pEsc">Escenario<select id="pEsc"><option value="1">Base</option><option value="0.9">Conservador (−10%)</option><option value="1.1">Optimista (+10%)</option></select></label><button id="btnPronBanco" title="La primera vez sube tu bancos.xlsx completo. Después puedes subir solo los movimientos nuevos (del día o de la semana): se suman al historial guardado.">Actualizar con movimientos del banco</button><input type="file" id="pBanco" accept=".xlsx,.xls" hidden><button class="ghost" id="btnPron" title="Opcional: subir un Excel de pronóstico ya armado (formato v4)">Cargar Excel de pronóstico</button><input type="file" id="pFile" accept=".xlsx,.xls" hidden></span></div>
     </div>
     <div class="pvista" role="group" aria-label="Vista del pronóstico"><button type="button" id="pvAg" aria-pressed="true">Agenda por quincena</button><button type="button" id="pvTb" aria-pressed="false">Tabla de convenios</button></div>
     <div id="pAgWrap"><div id="pAgBox" class="anabox"><div class="fin">Cargando pronóstico…</div></div></div>
@@ -3213,14 +3213,43 @@ async function guardarPronCalculado(conv, meta){
   await setDoc(doc(fs,C_PMETA,"actual"),meta);
   return viejos.length;
 }
+// Historial de movimientos del banco (solo supervisión): pron_movs/c000, c001… con renglones "fecha\tabono\tcomentario\treferencia"
+const C_PMOVS="pron_movs";
+async function leerMovsBanco(){
+  const s=await getDocs(collection(fs,C_PMOVS)); const out=[];
+  for(const d of [...s.docs].sort((a,b)=>a.id<b.id?-1:1)){ for(const t of (d.data().r||[])){ const [f,a,c,ref]=String(t).split("\t"); const [y,m,dd]=String(f).split("-").map(Number);
+    if(y&&m&&dd) out.push({f:new Date(y,m-1,dd), a:+a||0, c:c||"", ref:ref||""}); } }
+  return out;
+}
+async function guardarMovsBanco(movs){
+  const lineas=movs.map(x=>paIso(x.f)+"\t"+(Math.round(x.a*100)/100)+"\t"+String(x.c||"").replace(/[\t\r\n]+/g," ").slice(0,400)+"\t"+String(x.ref||"").replace(/[\t\r\n]+/g," ")).sort();
+  const partes=[]; let cur=[], peso=0;
+  for(const l of lineas){ if(cur.length && (peso+l.length>700000 || cur.length>=6000)){ partes.push(cur); cur=[]; peso=0; } cur.push(l); peso+=l.length+8; }
+  if(cur.length) partes.push(cur);
+  const antes=await getDocs(collection(fs,C_PMOVS));
+  const ids=partes.map((_,i)=>"c"+String(i).padStart(3,"0"));
+  for(let i=0;i<partes.length;i++){ await setDoc(doc(fs,C_PMOVS,ids[i]),{r:partes[i], n:partes[i].length, desde:partes[i][0].slice(0,10), hasta:partes[i][partes[i].length-1].slice(0,10)}); }
+  for(const d of antes.docs) if(!ids.includes(d.id)) await deleteDoc(doc(fs,C_PMOVS,d.id));
+}
 async function actualizarPronBanco(file){
   if(!esJefe) return;
   if(!window.XLSX){ flash("No se pudo cargar el lector de Excel. Recarga la página.","err"); return; }
   try{
     flash("Leyendo los movimientos del banco… (puede tardar unos segundos)");
     const wb=XLSX.read(await file.arrayBuffer(),{type:"array",cellDates:true});
-    const movs=paLeerBanco(wb);
-    if(!movs.length){ flash("No encontré movimientos. El archivo debe tener columnas Fecha, Abono y Comentarios (como tu bancos.xlsx).","err"); return; }
+    const nuevos=paLeerBanco(wb);
+    if(!nuevos.length){ flash("No encontré movimientos. El archivo debe tener columnas Fecha, Abono y Comentarios (como tu bancos.xlsx).","err"); return; }
+    // juntar con el historial guardado, movimiento por movimiento (fecha + abono + referencia + comentario):
+    // lo que ya estaba no se duplica y lo nuevo se agrega
+    flash("Juntando con el historial del banco guardado…");
+    const guardados=await leerMovsBanco();
+    const llave=x=>paIso(x.f)+"|"+Math.round(x.a*100)+"|"+paNorm(x.ref)+"|"+paNorm(String(x.c||"").slice(0,400));
+    const cuenta=new Map(); for(const x of guardados){ const k=llave(x); cuenta.set(k,(cuenta.get(k)||0)+1); }
+    const vistos=new Map(), movs=guardados.slice();
+    for(const x of nuevos){ const k=llave(x); const v=(vistos.get(k)||0)+1; vistos.set(k,v); if(v>(cuenta.get(k)||0)) movs.push(x); }
+    const fmin=movs.reduce((a,x)=>!a||x.f<a?x.f:a,null), fmax=movs.reduce((a,x)=>!a||x.f>a?x.f:a,null);
+    if((fmax-fmin)/864e5 < 365){
+      flash(`Este archivo solo trae movimientos del ${paIso(nuevos.reduce((a,x)=>!a||x.f<a?x.f:a,null))} al ${paIso(nuevos.reduce((a,x)=>!a||x.f>a?x.f:a,null))} y todavía no hay historial guardado. La primera vez sube tu bancos.xlsx completo (con las hojas de cada año); después ya puedes subir solo los movimientos nuevos.`,"err"); return; }
     const anios=new Set(movs.map(x=>x.f.getFullYear()));
     const sel=$("pEsc"); const factor=+sel.value||1, escenario=sel.options[sel.selectedIndex].text.replace(/ \(.*\)$/,"");
     const listas=[...rows.values()].map(r=>({financiera:r.financiera, convenio:r.convenio, dependencia:r.dependencia}));
@@ -3228,8 +3257,10 @@ async function actualizarPronBanco(file){
     const Y=+String(R.meta.corte).slice(-4);
     const faltan=[Y-3,Y-2,Y-1].filter(y=>!anios.has(y));
     const meta={...R.meta, archivo:file.name.slice(0,120), cargado:nowIso(), cargadoPor:me.nombre, indices:Object.fromEntries(Object.entries(R.idx).map(([g,v])=>[g.replace(/[.\/]/g," "),v]))};
+    flash("Guardando el historial del banco…");
+    await guardarMovsBanco(movs);
     const quitados=await guardarPronCalculado(R.docs, meta);
-    flash(`Pronóstico actualizado con el banco: ${R.docs.size} convenios, datos reales al ${R.meta.corte}${quitados?` (${quitados} que ya no aparecen se quitaron)`:""}.${faltan.length?` Ojo: el archivo no trae ${faltan.join(", ")}; la estacionalidad usa solo los años que sí vienen.`:""}`);
+    flash(`Pronóstico actualizado con el banco: ${R.docs.size} convenios, datos reales al ${R.meta.corte}. Se agregaron ${movs.length-guardados.length} movimientos nuevos de este archivo; historial guardado: ${movs.length} movimientos desde ${paIso(fmin)}${quitados?` (${quitados} que ya no aparecen se quitaron)`:""}.${faltan.length?` Ojo: el archivo no trae ${faltan.join(", ")}; la estacionalidad usa solo los años que sí vienen.`:""}`);
   }catch(err){ console.error(err); err?.code?handleWriteErr(err):flash("No se pudo calcular el pronóstico: "+(err?.message||err),"err"); }
 }
 
